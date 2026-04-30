@@ -166,13 +166,13 @@ export default function HumanGame() {
 
       subscriptionRef.current = channel;
 
-      // 4. 备用轮询：每 2 秒检查一次是否已匹配（以防 Realtime 延迟）
+      // 4. 备用轮询：每 500ms 检查一次是否已匹配（以防 Realtime 延迟）
       matchPollRef.current = setInterval(async () => {
         if (matchState === 'matched') {
           if (matchPollRef.current) clearInterval(matchPollRef.current);
           return;
         }
-        
+
         const { data: myRecord } = await supabase
           .from('matchmaking')
           .select('*')
@@ -180,9 +180,14 @@ export default function HumanGame() {
           .maybeSingle();
 
         if (myRecord?.status === 'matched' && myRecord?.matched_with) {
+          // 匹配成功，清理轮询后调用
+          if (matchPollRef.current) {
+            clearInterval(matchPollRef.current);
+            matchPollRef.current = null;
+          }
           handleMatchFound(myRecord.matched_with);
         }
-      }, 2000);
+      }, 500);
 
     } catch {
       toast.error('匹配失败，请重试');
