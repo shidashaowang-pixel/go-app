@@ -18,7 +18,7 @@ import {
   FlaskConical, ChevronLeft, X, RotateCcw, Swords
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { tryCreateGame, waitForGame, startFriendMatch } from '@/lib/matchmaking-v3';
+import { tryCreateGame, waitForGame, startFriendMatch, checkForPendingGame } from '@/lib/matchmaking-v3';
 import { getRankInfo } from '@/pages/Home';
 import {
   playLevelUpSound, playWrongSound,
@@ -296,29 +296,30 @@ export default function HumanGame() {
     });
     setMatchState('matched');
 
-    // 尝试创建游戏
-    const gameId = await tryCreateGame(
+    // 尝试创建游戏（根据 created_at 判断谁是创建者）
+    const result = await tryCreateGame(
       user!.id,
-      opponentId,
       boardSize,
       timeKey,
       handicapMode,
       handicapCount
     );
 
-    if (gameId) {
+    if (result) {
       // 我是创建者，游戏创建成功
-      setGameId(gameId);
+      setGameId(result.gameId);
+      setCurrentColor(result.myColor);
       setMatchState('playing');
-      joinGameRoom(gameId);
+      joinGameRoom(result.gameId);
     } else {
       // 我不是创建者，等待对方创建
-      const result = await waitForGame(user!.id, 60000);
+      const waitResult = await waitForGame(user!.id, 60000);
 
-      if (result.type === 'game_created') {
-        setGameId(result.gameId);
+      if (waitResult.type === 'game_created') {
+        setGameId(waitResult.gameId);
+        setCurrentColor(waitResult.myColor);
         setMatchState('playing');
-        joinGameRoom(result.gameId);
+        joinGameRoom(waitResult.gameId);
       } else {
         toast.error('等待匹配超时，请重试');
         setMatchState('idle');
@@ -340,9 +341,6 @@ export default function HumanGame() {
     const friend = friends.find(f => f.id === friendId);
     if (!friend || !user) return;
 
-    // 清理旧的匹配记录
-    await supabase.from('matchmaking').delete().eq('user_id', user.id);
-
     // 设置对手信息
     setOpponent({
       id: friend.id,
@@ -352,7 +350,7 @@ export default function HumanGame() {
     });
     setMatchState('matched');
 
-    // 进入好友对战队列
+    // 邀请方直接创建游戏
     const result = await startFriendMatch(
       user.id,
       friendId,
@@ -368,32 +366,16 @@ export default function HumanGame() {
       return;
     }
 
-    // 监听好友响应（或者直接尝试创建游戏）
-    // 好友对战逻辑：邀请方自动成为创建者
-    const gameId = await tryCreateGame(
-      user.id,
-      friendId,
-      boardSize,
-      timeKey,
-      handicapMode,
-      handicapCount
-    );
-
-    if (gameId) {
-      setGameId(gameId);
+    // 获取我创建的游戏
+    const gameResult = await checkForPendingGame(user.id);
+    if (gameResult) {
+      setGameId(gameResult.gameId);
+      setCurrentColor(gameResult.myColor);
       setMatchState('playing');
-      joinGameRoom(gameId);
+      joinGameRoom(gameResult.gameId);
     } else {
-      // 好友可能正在处理，等待一下
-      const waitResult = await waitForGame(user.id, 30000);
-      if (waitResult.type === 'game_created') {
-        setGameId(waitResult.gameId);
-        setMatchState('playing');
-        joinGameRoom(waitResult.gameId);
-      } else {
-        toast.error('等待好友响应超时');
-        setMatchState('idle');
-      }
+      toast.error('游戏创建失败');
+      setMatchState('idle');
     }
   };
 

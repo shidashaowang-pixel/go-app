@@ -1,14 +1,19 @@
 /**
- * 简化匹配系统 v3 - 最终修复版
- * 核心原则：数据库触发器已经确定谁是创建者，前端只需要遵循数据库的设置
+ * 简化匹配系统 v4 - 彻底修复版
+ * 核心思路：不再依赖 matchmaking 表的 room_creator_id，直接在创建游戏时判断
+ * 谁先进入队列谁就是创建者（通过 created_at 时间戳判断）
  */
 
 import { supabase } from '@/db/supabase';
 
-// 等待类型
+/**
+ * 等待结果类型
+ */
 type WaitResult = {
   type: 'game_created';
   gameId: string;
+  myColor: 'black' | 'white';
+  opponentColor: 'black' | 'white';
 } | {
   type: 'cancelled';
 } | {
@@ -16,49 +21,90 @@ type WaitResult = {
 };
 
 /**
+ * 获取当前用户的匹配记录
+ */
+async function getMyMatchRecord(userId: string) {
+  const { data, error } = await supabase
+    .from('matchmaking')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'matched')
+    .maybeSingle();
+  
+  return { data, error };
+}
+
+/**
+ * 获取对手的匹配记录（通过 matched_with 关联）
+ */
+async function getOpponentMatchRecord(userId: string) {
+  // 先获取自己的记录
+  const myRecord = await getMyMatchRecord(userId);
+  if (!myRecord.data?.matched_with) return null;
+  
+  // 获取对手的记录
+  const { data } = await supabase
+    .from('matchmaking')
+    .select('*')
+    .eq('user_id', myRecord.data.matched_with)
+    .maybeSingle();
+  
+  return data;
+}
+
+/**
  * 尝试创建游戏
- * 数据库触发器已经确定了谁是创建者（room_creator_id）
- * - 如果我是创建者，调用此函数创建游戏
- * - 如果我不是创建者，返回 null
+ * 规则：谁先进入队列（created_at 更早），谁就是创建者
  */
 export async function tryCreateGame(
   userId: string,
-  opponentId: string,
   boardSize: number,
   timeControl: string,
   handicapMode: string,
   handicapCount: number
-): Promise<string | null> {
-  // 1. 检查我的 matchmaking 记录，获取创建者信息
-  const { data: myRecord, error: fetchError } = await supabase
-    .from('matchmaking')
-    .select('id, user_id, room_creator_id, status, matched_with')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (fetchError || !myRecord) {
-    console.log('[匹配] 未找到我的 matchmaking 记录');
+): Promise<{ gameId: string; myColor: 'black' | 'white' } | null> {
+  // 1. 获取我的记录
+  const myRecord = await getMyMatchRecord(userId);
+  if (!myRecord.data) {
+    console.log('[匹配] 未找到我的 matched 记录');
     return null;
   }
 
-  // 2. 判断我是否是创建者
-  // 如果 room_creator_id 等于我的 user_id，我就是创建者
-  const isCreator = myRecord.room_creator_id === userId;
+  // 2. 获取对手记录
+  const opponentRecord = await getOpponentMatchRecord(userId);
+  if (!opponentRecord) {
+    console.log('[匹配] 未找到对手记录');
+    return null;
+  }
+
+  const myCreatedAt = new Date(myRecord.data.created_at);
+  const opponentCreatedAt = new Date(opponentRecord.created_at);
   
+  // 3. 判断谁是创建者：谁 created_at 更早，谁就是创建者
+  const isCreator = myCreatedAt < opponentCreatedAt;
+  
+  console.log('[匹配] 创建者判断:', {
+    myCreatedAt: myCreatedAt.toISOString(),
+    opponentCreatedAt: opponentCreatedAt.toISOString(),
+    isCreator
+  });
+
+  // 4. 如果我不是创建者，等待对方创建
   if (!isCreator) {
-    console.log('[匹配] 我不是创建者，应等待对方创建游戏');
+    console.log('[匹配] 我不是创建者，等待对方创建');
     return null;
   }
 
-  console.log('[匹配] 确认我是创建者，开始创建游戏');
+  console.log('[匹配] 我是创建者，开始创建游戏');
 
-  // 3. 创建游戏
+  // 5. 创建游戏
   const komiValue = handicapMode === 'even'
     ? (boardSize <= 9 ? 5.5 : boardSize <= 13 ? 6.5 : 7.5)
     : 0;
 
   // 随机分配黑白
   const userIsBlack = Math.random() < 0.5;
+  const opponentId = myRecord.data.matched_with;
   const blackPlayerId = userIsBlack ? userId : opponentId;
   const whitePlayerId = userIsBlack ? opponentId : userId;
 
@@ -90,7 +136,7 @@ export async function tryCreateGame(
 
   console.log('[匹配] 游戏创建成功:', game.id);
 
-  // 4. 更新我的 matchmaking 状态
+  // 6. 更新双方 matchmaking 状态
   await supabase
     .from('matchmaking')
     .update({
@@ -99,7 +145,18 @@ export async function tryCreateGame(
     })
     .eq('user_id', userId);
 
-  return game.id;
+  await supabase
+    .from('matchmaking')
+    .update({
+      status: 'playing',
+      game_id: game.id,
+    })
+    .eq('user_id', opponentId);
+
+  return {
+    gameId: game.id,
+    myColor: userIsBlack ? 'black' : 'white'
+  };
 }
 
 /**
@@ -112,25 +169,41 @@ export async function waitForGame(
   return new Promise((resolve) => {
     let resolved = false;
     
-    const checkAndResolve = (gameId: string | null) => {
-      if (resolved || !gameId) return;
-      resolved = true;
-      resolve({ type: 'game_created', gameId });
+    const checkAndResolve = async () => {
+      if (resolved) return;
+      
+      // 检查我的记录
+      const myRecord = await getMyMatchRecord(userId);
+      if (!myRecord.data) return;
+      
+      // 检查是否有 game_id
+      if (myRecord.data.game_id) {
+        // 获取我是什么颜色
+        const opponentRecord = await getOpponentMatchRecord(userId);
+        if (!opponentRecord) return;
+        
+        // 假设创建者给随机分配黑白，我们需要从 games 表获取
+        const { data: game } = await supabase
+          .from('games')
+          .select('black_player_id')
+          .eq('id', myRecord.data.game_id)
+          .maybeSingle();
+        
+        if (game) {
+          resolved = true;
+          const myColor = game.black_player_id === userId ? 'black' : 'white';
+          resolve({
+            type: 'game_created',
+            gameId: myRecord.data.game_id,
+            myColor,
+            opponentColor: myColor === 'black' ? 'white' : 'black'
+          });
+        }
+      }
     };
 
     // 立即检查一次
-    (async () => {
-      const { data } = await supabase
-        .from('matchmaking')
-        .select('game_id, status')
-        .eq('user_id', userId)
-        .maybeSingle();
-      
-      if (data?.game_id && data?.status === 'playing') {
-        checkAndResolve(data.game_id);
-        return;
-      }
-    })();
+    checkAndResolve();
 
     // Realtime 监听
     const channel = supabase
@@ -140,25 +213,16 @@ export async function waitForGame(
         schema: 'public',
         table: 'matchmaking',
         filter: `user_id=eq.${userId}`,
-      }, (payload) => {
-        const data = payload.new as { game_id: string; status: string };
-        if (data.game_id && data.status === 'playing') {
-          checkAndResolve(data.game_id);
-        }
+      }, async () => {
+        await checkAndResolve();
       })
       .subscribe();
 
     // 备用轮询
     const pollInterval = setInterval(async () => {
-      const { data } = await supabase
-        .from('matchmaking')
-        .select('game_id, status')
-        .eq('user_id', userId)
-        .maybeSingle();
-      
-      if (data?.game_id && data?.status === 'playing') {
+      await checkAndResolve();
+      if (resolved) {
         clearInterval(pollInterval);
-        checkAndResolve(data.game_id);
       }
     }, 1000);
 
@@ -176,21 +240,26 @@ export async function waitForGame(
 /**
  * 检查是否有待创建的游戏（恢复用）
  */
-export async function checkForPendingGame(userId: string): Promise<string | null> {
-  const { data } = await supabase
-    .from('matchmaking')
-    .select('game_id')
-    .eq('user_id', userId)
-    .eq('status', 'playing')
-    .not('game_id', 'is', null)
+export async function checkForPendingGame(userId: string): Promise<{ gameId: string; myColor: 'black' | 'white' } | null> {
+  const myRecord = await getMyMatchRecord(userId);
+  if (!myRecord.data?.game_id) return null;
+  
+  const { data: game } = await supabase
+    .from('games')
+    .select('black_player_id')
+    .eq('id', myRecord.data.game_id)
     .maybeSingle();
-
-  return data?.game_id ?? null;
+  
+  if (!game) return null;
+  
+  return {
+    gameId: myRecord.data.game_id,
+    myColor: game.black_player_id === userId ? 'black' : 'white'
+  };
 }
 
 /**
- * 好友对战：直接进入匹配队列
- * 好友对战不需要随机匹配，而是直接建立连接
+ * 好友对战：直接创建游戏（邀请方自动成为创建者）
  */
 export async function startFriendMatch(
   userId: string,
@@ -206,23 +275,52 @@ export async function startFriendMatch(
     .delete()
     .eq('user_id', userId);
 
-  // 进入好友对战队列
-  const { error } = await supabase
-    .from('matchmaking')
-    .upsert({
-      user_id: userId,
-      board_size: boardSize,
-      time_control: timeControl,
-      status: 'friend_waiting',
-      rating: 0,
-      matched_with: friendId,
-      created_at: new Date().toISOString(),
-    });
+  // 邀请方直接创建游戏
+  const komiValue = handicapMode === 'even'
+    ? (boardSize <= 9 ? 5.5 : boardSize <= 13 ? 6.5 : 7.5)
+    : 0;
 
-  if (error) {
-    console.error('[好友对战] 进入队列失败:', error);
-    return { success: false, error: error.message };
+  const userIsBlack = Math.random() < 0.5;
+  const blackPlayerId = userIsBlack ? userId : friendId;
+  const whitePlayerId = userIsBlack ? friendId : userId;
+
+  const { data: game, error: gameError } = await supabase
+    .from('games')
+    .insert({
+      type: 'human',
+      status: 'ongoing',
+      result: null,
+      black_player_id: blackPlayerId,
+      white_player_id: whitePlayerId,
+      ai_difficulty: null,
+      board_size: boardSize,
+      moves: [],
+      end_type: null,
+      score_detail: null,
+      black_captures: 0,
+      white_captures: 0,
+      move_count: 0,
+      duration_seconds: null,
+    })
+    .select()
+    .single();
+
+  if (gameError || !game) {
+    console.error('[好友对战] 创建游戏失败:', gameError);
+    return { success: false, error: gameError?.message };
   }
+
+  // 创建我的匹配记录
+  await supabase.from('matchmaking').upsert({
+    user_id: userId,
+    board_size: boardSize,
+    time_control: timeControl,
+    status: 'playing',
+    rating: 0,
+    matched_with: friendId,
+    game_id: game.id,
+    created_at: new Date().toISOString(),
+  });
 
   return { success: true };
 }
@@ -232,22 +330,31 @@ export async function startFriendMatch(
  */
 export function subscribeToFriendMatch(
   userId: string,
-  friendId: string,
-  onMatchStart: (gameId: string) => void,
+  onMatchStart: (gameId: string, myColor: 'black' | 'white') => void,
   onTimeout: () => void,
   timeoutMs: number = 30000
 ): () => void {
   const channel = supabase
     .channel('friend-match-' + userId)
     .on('postgres_changes', {
-      event: 'UPDATE',
+      event: 'INSERT',
       schema: 'public',
       table: 'matchmaking',
-      filter: `user_id=eq.${friendId}`,
-    }, (payload) => {
-      const data = payload.new as { status: string; game_id: string };
-      if (data.status === 'playing' && data.game_id) {
-        onMatchStart(data.game_id);
+      filter: `user_id=eq.${userId}`,
+    }, async (payload) => {
+      const data = payload.new as { game_id: string; matched_with: string };
+      if (data.game_id) {
+        // 获取我是什么颜色
+        const { data: game } = await supabase
+          .from('games')
+          .select('black_player_id')
+          .eq('id', data.game_id)
+          .maybeSingle();
+        
+        if (game) {
+          const myColor = game.black_player_id === userId ? 'black' : 'white';
+          onMatchStart(data.game_id, myColor);
+        }
       }
     })
     .subscribe();
@@ -256,13 +363,24 @@ export function subscribeToFriendMatch(
   const pollInterval = setInterval(async () => {
     const { data } = await supabase
       .from('matchmaking')
-      .select('game_id, status')
-      .eq('user_id', friendId)
+      .select('game_id, matched_with')
+      .eq('user_id', userId)
+      .eq('status', 'playing')
+      .not('game_id', 'is', null)
       .maybeSingle();
     
-    if (data?.game_id && data?.status === 'playing') {
+    if (data?.game_id) {
       clearInterval(pollInterval);
-      onMatchStart(data.game_id);
+      const { data: game } = await supabase
+        .from('games')
+        .select('black_player_id')
+        .eq('id', data.game_id)
+        .maybeSingle();
+      
+      if (game) {
+        const myColor = game.black_player_id === userId ? 'black' : 'white';
+        onMatchStart(data.game_id, myColor);
+      }
     }
   }, 1000);
 
