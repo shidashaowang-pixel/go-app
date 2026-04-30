@@ -165,28 +165,36 @@ export default function HumanGame() {
 
       subscriptionRef.current = channel;
 
-      // 4. 备用轮询：每 500ms 检查一次是否已匹配（以防 Realtime 延迟）
+      // 4. 备用轮询：每秒检查一次是否已匹配（以防 Realtime 延迟）
       matchPollRef.current = setInterval(async () => {
-        if (matchState === 'matched') {
-          if (matchPollRef.current) clearInterval(matchPollRef.current);
-          return;
-        }
-
-        const { data: myRecord } = await supabase
-          .from('matchmaking')
-          .select('*')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
-        if (myRecord?.status === 'matched' && myRecord?.matched_with) {
-          // 匹配成功，清理轮询后调用
+        // 如果已经匹配或正在游戏中，停止轮询
+        if (matchState === 'matched' || matchState === 'playing') {
           if (matchPollRef.current) {
             clearInterval(matchPollRef.current);
             matchPollRef.current = null;
           }
-          handleMatchFound(myRecord.matched_with);
+          return;
         }
-      }, 500);
+
+        try {
+          const { data: myRecord } = await supabase
+            .from('matchmaking')
+            .select('*')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          if (myRecord?.status === 'matched' && myRecord?.matched_with) {
+            // 匹配成功，清理轮询后调用
+            if (matchPollRef.current) {
+              clearInterval(matchPollRef.current);
+              matchPollRef.current = null;
+            }
+            handleMatchFound(myRecord.matched_with);
+          }
+        } catch (e) {
+          console.error('轮询错误:', e);
+        }
+      }, 1000);
 
     } catch {
       toast.error('匹配失败，请重试');
@@ -258,33 +266,39 @@ export default function HumanGame() {
     const opponentToUse = matchedOpponent || opponent;
     if (!user || !opponentToUse) return;
 
-    // 根据模式设置贴目
+    // 根据模式设置贴目和黑白
     let komiValue: number;
-    if (handicapMode === 'even') {
-      komiValue = boardSize <= 9 ? 5.5 : boardSize <= 13 ? 6.5 : 7.5;
-    } else {
-      komiValue = 0; // 让先/让子无贴目
-    }
-    const newEngine = new GoEngine(boardSize, komiValue);
+    let userIsBlack: boolean;
 
     if (handicapMode === 'even') {
       // 分先：有贴目，随机黑白
-      const userIsBlack = Math.random() < 0.5;
+      komiValue = boardSize <= 9 ? 5.5 : boardSize <= 13 ? 6.5 : 7.5;
+      userIsBlack = Math.random() < 0.5;
       setCurrentColor(userIsBlack ? 'black' : 'white');
     } else if (handicapMode === 'first') {
       // 让先：无贴目，黑先下
+      komiValue = 0;
+      userIsBlack = true;
       setCurrentColor('black');
     } else {
-      // 让子：无贴目，被让方执黑放子，白先下
+      // 让子：无贴目
+      komiValue = 0;
+      userIsBlack = true; // 默认用户执黑
+      setCurrentColor('black');
+    }
+
+    const newEngine = new GoEngine(boardSize, komiValue);
+
+    if (handicapMode === 'stones') {
+      // 让子模式下放置棋子
       newEngine.setHandicap(handicapCount);
       if (handicapDirection === 'ai-gives') {
-        // 用户执黑放子
         newEngine.placeHandicapAsWhite();
         setCurrentColor('black');
       } else {
-        // 对手执黑放子
         newEngine.placeHandicap();
         setCurrentColor('white');
+        userIsBlack = false;
       }
     }
 
