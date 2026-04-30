@@ -220,15 +220,19 @@ export default function HumanGame() {
       .maybeSingle();
 
     if (data) {
-      setOpponent({
+      const matchedOpponent: OnlinePlayer = {
         id: data.id,
         nickname: data.nickname,
         username: data.username,
         rating: data.rating,
-      });
+      };
+      setOpponent(matchedOpponent);
       setMatchState('matched');
       if (searchTimerRef.current) clearInterval(searchTimerRef.current);
       if (matchPollRef.current) clearInterval(matchPollRef.current);
+
+      // 自动开始游戏（不再需要手动点击"开始"）
+      await handleStartGame(matchedOpponent);
     }
   };
 
@@ -245,8 +249,10 @@ export default function HumanGame() {
   };
 
   // ========== 开始对弈 ==========
-  const handleStartGame = async () => {
-    if (!user || !opponent) return;
+  const handleStartGame = async (matchedOpponent?: OnlinePlayer) => {
+    // 如果传入了匹配的 opponent，使用它；否则使用 state 中的 opponent
+    const opponentToUse = matchedOpponent || opponent;
+    if (!user || !opponentToUse) return;
 
     // 根据模式设置贴目
     let komiValue: number;
@@ -291,8 +297,8 @@ export default function HumanGame() {
         type: 'human',
         status: 'ongoing',
         result: null,
-        black_player_id: userIsBlack ? user.id : opponent.id,
-        white_player_id: userIsBlack ? opponent.id : user.id,
+        black_player_id: userIsBlack ? user.id : opponentToUse.id,
+        white_player_id: userIsBlack ? opponentToUse.id : user.id,
         ai_difficulty: null,
         board_size: boardSize,
         moves: [],
