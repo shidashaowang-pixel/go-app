@@ -296,6 +296,9 @@ DROP POLICY IF EXISTS "成员可以查看设置" ON club_settings;
 CREATE POLICY "成员可以查看设置" ON club_settings FOR SELECT TO authenticated 
   USING (club_id IN (SELECT club_id FROM club_members WHERE user_id = auth.uid()));
 
+DROP POLICY IF EXISTS "系统可以创建默认设置" ON club_settings;
+CREATE POLICY "系统可以创建默认设置" ON club_settings FOR INSERT TO authenticated WITH CHECK (true);
+
 DROP POLICY IF EXISTS "社长可以修改设置" ON club_settings;
 CREATE POLICY "社长可以修改设置" ON club_settings FOR ALL TO authenticated 
   USING (club_id IN (SELECT id FROM clubs WHERE owner_id = auth.uid()));

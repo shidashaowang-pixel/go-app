@@ -1,1 +1,0 @@
-import{m as e,p as t}from"./index-CsgjC_M1.js";e();export{t as GoEngine};

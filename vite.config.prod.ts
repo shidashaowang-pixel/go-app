@@ -24,5 +24,5 @@ export default defineConfig({
     sourcemap: false,
     minify: "esbuild",
   },
-  base: "/go-app/",
+  base: "./",
 });

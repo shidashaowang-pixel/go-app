@@ -166,20 +166,23 @@ export default function HumanGame() {
 
       subscriptionRef.current = channel;
 
-      // 4. 同时轮询检查新对手（兜底，以防 Realtime 延迟）
+      // 4. 备用轮询：每 2 秒检查一次是否已匹配（以防 Realtime 延迟）
       matchPollRef.current = setInterval(async () => {
-        const { data: waiting } = await supabase
-          .from('matchmaking')
-          .select('user_id')
-          .eq('status', 'searching')
-          .eq('board_size', boardSize)
-          .neq('user_id', user.id)
-          .limit(1);
-
-        if (waiting && waiting.length > 0) {
-          await matchWith(waiting[0].user_id);
+        if (matchState === 'matched') {
+          if (matchPollRef.current) clearInterval(matchPollRef.current);
+          return;
         }
-      }, 3000);
+        
+        const { data: myRecord } = await supabase
+          .from('matchmaking')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (myRecord?.status === 'matched' && myRecord?.matched_with) {
+          handleMatchFound(myRecord.matched_with);
+        }
+      }, 2000);
 
     } catch {
       toast.error('匹配失败，请重试');

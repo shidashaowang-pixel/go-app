@@ -2566,6 +2566,7 @@ export async function getUserClubs(userId: string): Promise<Club[]> {
 
 /** 创建棋社 */
 export async function createClub(userId: string, name: string, description: string): Promise<Club | null> {
+  // 1. 创建棋社记录
   const { data, error } = await supabase
     .from('clubs')
     .insert({
@@ -2575,15 +2576,20 @@ export async function createClub(userId: string, name: string, description: stri
       is_public: true,
     })
     .select()
-    .maybeSingle();
+    .single();
 
   if (error) {
-    console.error('创建棋社失败:', error);
+    console.error('❌ 创建棋社失败:', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint
+    });
     return null;
   }
 
-  // 自动将自己添加为社长
-  await supabase
+  // 2. 自动将自己添加为社长
+  const { error: memberError } = await supabase
     .from('club_members')
     .insert({
       club_id: data.id,
@@ -2591,15 +2597,34 @@ export async function createClub(userId: string, name: string, description: stri
       role: 'owner',
     });
 
-  // 发放加入奖励
-  const { data: settings } = await supabase
-    .from('club_settings')
-    .select('join_bonus_coins')
-    .eq('club_id', data.id)
-    .maybeSingle();
+  if (memberError) {
+    console.error('❌ 添加社长成员失败:', {
+      code: memberError.code,
+      message: memberError.message,
+      details: memberError.details,
+      hint: memberError.hint
+    });
+    // 清理已创建的棋社
+    await supabase.from('clubs').delete().eq('id', data.id);
+    return null;
+  }
 
-  if (settings?.join_bonus_coins) {
-    await addCoins(userId, settings.join_bonus_coins, 'club_join_bonus', `加入棋社：${name}`);
+  // 3. club_settings 记录会通过数据库触发器自动创建
+  // 如果需要，可以在这里手动创建或查询
+
+  // 4. 发放加入奖励（可选，静默失败不影响创建成功）
+  try {
+    const { data: settings } = await supabase
+      .from('club_settings')
+      .select('join_bonus_coins')
+      .eq('club_id', data.id)
+      .maybeSingle();
+
+    if (settings?.join_bonus_coins) {
+      await addCoins(userId, settings.join_bonus_coins, 'club_join_bonus', `加入棋社：${name}`);
+    }
+  } catch (e) {
+    console.warn('发放加入奖励失败（不影响棋社创建）:', e);
   }
 
   return { ...data, member_count: 1 };
