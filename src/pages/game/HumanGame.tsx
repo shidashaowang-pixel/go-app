@@ -61,6 +61,71 @@ export default function HumanGame() {
   const searchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const engineRef = useRef<GoEngine | null>(null);
   const matchPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gameTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 倒计时相关
+  const [blackTime, setBlackTime] = useState(600); // 黑棋剩余秒数
+  const [whiteTime, setWhiteTime] = useState(600); // 白棋剩余秒数
+
+  // 根据时间设置获取初始秒数
+  const getInitialTime = () => {
+    switch (timeKey) {
+      case '5min': return 300;
+      case '10min': return 600;
+      case '20min': return 1200;
+      case '30min': return 1800;
+      default: return 600;
+    }
+  };
+
+  // 格式化时间为 MM:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // 启动游戏计时器
+  const startGameTimer = () => {
+    if (gameTimerRef.current) clearInterval(gameTimerRef.current);
+    const initial = getInitialTime();
+    setBlackTime(initial);
+    setWhiteTime(initial);
+
+    gameTimerRef.current = setInterval(() => {
+      if (currentColor === 'black') {
+        setBlackTime(prev => {
+          if (prev <= 1) {
+            // 黑棋超时，判负
+            clearInterval(gameTimerRef.current!);
+            handleGameTimeout('black');
+            return 0;
+          }
+          return prev - 1;
+        });
+      } else {
+        setWhiteTime(prev => {
+          if (prev <= 1) {
+            // 白棋超时，判负
+            clearInterval(gameTimerRef.current!);
+            handleGameTimeout('white');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
+    }, 1000);
+  };
+
+  // 超时处理
+  const handleGameTimeout = (loserColor: StoneColor) => {
+    const eng = engineRef.current;
+    if (eng) {
+      const winner = loserColor === 'black' ? 'white' : 'black';
+      handleGameEnd(eng, winner, 'timeout');
+      toast.error(`${loserColor === 'black' ? '黑棋' : '白棋'}超时！${winner === currentColor ? '你' : '对手'}获胜！`);
+    }
+  };
 
   // 保持 engineRef 同步
   useEffect(() => {
@@ -92,6 +157,10 @@ export default function HumanGame() {
     if (matchPollRef.current) {
       clearInterval(matchPollRef.current);
       matchPollRef.current = null;
+    }
+    if (gameTimerRef.current) {
+      clearInterval(gameTimerRef.current);
+      gameTimerRef.current = null;
     }
   };
 
@@ -243,8 +312,8 @@ export default function HumanGame() {
       if (searchTimerRef.current) clearInterval(searchTimerRef.current);
       if (matchPollRef.current) clearInterval(matchPollRef.current);
 
-      // 自动开始游戏（不再需要手动点击"开始"）
-      await handleStartGame(matchedOpponent);
+      // 显示确认界面，让用户点击"开始"按钮后再进入游戏
+      // 注意：在这里不调用 handleStartGame
     }
   };
 
@@ -306,8 +375,11 @@ export default function HumanGame() {
     engineRef.current = newEngine;
     setMatchState('playing');
 
+    // 启动游戏计时器
+    startGameTimer();
+
     const handicapText = handicapCount > 0 ? `（${handicapCount}子局）` : '（猜先）';
-    const colorText = userColor === 'black' ? '执黑' : '执白';
+    const colorText = currentColor === 'black' ? '执黑' : '执白';
     toast.success(`对弈开始！${handicapText}你${colorText}`);
 
     try {
@@ -388,6 +460,13 @@ export default function HumanGame() {
     if (!eng || eng.gameOver) return;
     setEngine(Object.assign(Object.create(Object.getPrototypeOf(eng)), eng));
 
+    // 记录刚下的颜色
+    const myColor = currentColor;
+
+    // 切换到对手
+    setCurrentColor(currentColor === 'black' ? 'white' : 'black');
+    setIsOpponentThinking(true);
+
     // 广播落子
     if (gameId) {
       await supabase
@@ -397,7 +476,7 @@ export default function HumanGame() {
           move_number: eng.getMoveCount(),
           row,
           col,
-          player: currentColor,
+          player: myColor,
           created_at: new Date().toISOString(),
         });
     }
@@ -815,6 +894,28 @@ export default function HumanGame() {
                   {currentColor === 'black' ? '⚪ 白棋' : '⚫ 黑棋'} · {opponentRankInfo.label}
                   {!isMyTurn && !engine.gameOver && isOpponentThinking && ' · 思考中...'}
                 </p>
+              </div>
+              {/* 对方倒计时 */}
+              <div className={`text-lg font-mono font-bold ${(currentColor === 'black' ? blackTime : whiteTime) < 60 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                {currentColor === 'black' ? formatTime(blackTime) : formatTime(whiteTime)}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 我的倒计时 */}
+          <Card className={`mb-3 ${isMyTurn && !engine.gameOver ? 'ring-2 ring-primary' : 'opacity-80'}`}>
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-lg shadow">🦊</div>
+              <div className="flex-1">
+                <p className="font-medium text-sm">{profile?.nickname || '你'}</p>
+                <p className="text-xs text-muted-foreground">
+                  {currentColor === 'black' ? '⚫ 黑棋' : '⚪ 白棋'} · {myRankInfo.label}
+                  {isMyTurn && !engine.gameOver && ' · 轮到你'}
+                </p>
+              </div>
+              {/* 我的倒计时 */}
+              <div className={`text-lg font-mono font-bold ${(currentColor === 'white' ? blackTime : whiteTime) < 60 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                {currentColor === 'white' ? formatTime(blackTime) : formatTime(whiteTime)}
               </div>
             </CardContent>
           </Card>
