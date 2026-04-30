@@ -36,26 +36,8 @@ jobs:
           # Create .nojekyll to disable Jekyll processing
           touch dist/.nojekyll
           
-          # Create 404.html for SPA routing
-          cat > dist/404.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Redirecting...</title>
-            <script>
-              (function() {
-                var path = window.location.pathname;
-                var search = window.location.search;
-                path = path.replace(/\/$/, '');
-                window.location.replace('/go-app/' + path + search);
-              })();
-            </script>
-          </head>
-          <body>
-          </body>
-          </html>
-          EOF
+          # Copy index.html to 404.html for SPA routing
+          cp dist/index.html dist/404.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
