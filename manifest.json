@@ -1,0 +1,28 @@
+{
+  "name": "围棋学堂",
+  "short_name": "围棋学堂",
+  "description": "少儿围棋学习平台 - 学习、练习、对弈、成长",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#10b981",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education", "games"],
+  "lang": "zh-CN",
+  "scope": "/",
+  "prefer_related_applications": false
+}
