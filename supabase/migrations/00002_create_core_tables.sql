@@ -124,7 +124,10 @@ CREATE POLICY "用户可以更新自己的对弈" ON games FOR UPDATE TO authent
 CREATE POLICY "用户可以查看自己的好友关系" ON friendships FOR SELECT TO authenticated 
   USING (user_id = auth.uid() OR friend_id = auth.uid());
 CREATE POLICY "用户可以添加好友" ON friendships FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
-CREATE POLICY "用户可以删除好友" ON friendships FOR DELETE TO authenticated USING (user_id = auth.uid());
+CREATE POLICY "用户可以更新自己的好友关系" ON friendships FOR UPDATE TO authenticated 
+  USING (user_id = auth.uid() OR friend_id = auth.uid());
+CREATE POLICY "用户可以删除自己的好友关系" ON friendships FOR DELETE TO authenticated 
+  USING (user_id = auth.uid() OR friend_id = auth.uid());
 
 -- 成就策略
 CREATE POLICY "用户可以查看自己的成就" ON achievements FOR SELECT TO authenticated USING (user_id = auth.uid());

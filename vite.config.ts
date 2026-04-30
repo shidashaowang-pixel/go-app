@@ -4,8 +4,12 @@ import react from "@vitejs/plugin-react";
 import svgr from "vite-plugin-svgr";
 import path from "path";
 
-// https://vite.dev/config/
 export default defineConfig({
+  base: "/go-app/",
+  server: {
+    host: "0.0.0.0", // 允许通过IP地址访问
+    port: 5175,
+  },
   plugins: [
     react(),
     miaodaDevPlugin(),

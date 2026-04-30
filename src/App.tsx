@@ -4,6 +4,7 @@ import IntersectObserver from '@/components/common/IntersectObserver';
 import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { RouteGuard } from '@/components/common/RouteGuard';
+import SyncStatus from '@/components/SyncStatus';
 
 import { routes } from './routes';
 
@@ -28,6 +29,7 @@ const App: React.FC = () => {
             </main>
           </div>
           <Toaster />
+          <SyncStatus />
         </RouteGuard>
       </AuthProvider>
     </Router>

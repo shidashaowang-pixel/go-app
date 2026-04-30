@@ -1,24 +1,53 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { Menu, Home, BookOpen, Swords, Users, User, GraduationCap } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Menu, Home, BookOpen, Swords, Users, User, GraduationCap, Eye, MessageCircle, UsersRound, Building2, Wallet } from 'lucide-react';
+import { getTotalUnreadCount, getUserCoins } from '@/db/api';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 export default function MainLayout({ children }: LayoutProps) {
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const location = useLocation();
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [coinBalance, setCoinBalance] = useState(0);
+
+  // 加载未读消息数和金币数
+  useEffect(() => {
+    if (user) {
+      getTotalUnreadCount(user.id).then(setUnreadCount);
+      getUserCoins(user.id).then(data => setCoinBalance(data?.balance || 0));
+      // 每30秒刷新一次
+      const interval = setInterval(() => {
+        getTotalUnreadCount(user.id).then(setUnreadCount);
+        getUserCoins(user.id).then(data => setCoinBalance(data?.balance || 0));
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
   const navItems = [
-    { path: '/', label: '首页', icon: Home, roles: ['child', 'parent', 'teacher'] },
-    { path: '/learn', label: '学习中心', icon: BookOpen, roles: ['child', 'parent'] },
-    { path: '/game', label: '对弈中心', icon: Swords, roles: ['child', 'parent'] },
-    { path: '/social', label: '社交排行', icon: Users, roles: ['child', 'parent'] },
-    { path: '/profile', label: '个人中心', icon: User, roles: ['child', 'parent', 'teacher'] },
-    { path: '/teacher', label: '教学管理', icon: GraduationCap, roles: ['teacher'] },
+    { path: '/', label: '首页', icon: Home, emoji: '🏠', roles: ['child', 'parent', 'teacher'] },
+    { path: '/parent', label: '家长中心', icon: Eye, emoji: '👨‍👩‍👧', roles: ['parent'] },
+    { path: '/learn', label: '学习中心', icon: BookOpen, emoji: '📚', roles: ['child', 'parent'] },
+    { path: '/game', label: '对弈中心', icon: Swords, emoji: '⚔️', roles: ['child', 'parent'] },
+    { path: '/social', label: '社交中心', icon: Users, emoji: '👫', roles: ['child', 'parent'] },
+    { path: '/profile', label: '个人中心', icon: User, emoji: '👤', roles: ['child', 'parent', 'teacher'] },
+    { path: '/teacher', label: '教学管理', icon: GraduationCap, emoji: '🎓', roles: ['teacher'] },
+  ];
+
+  // 新功能快捷入口 - 显示在顶部导航
+  const quickLinks = [
+    { path: '/social/lobby', label: '大厅', icon: UsersRound, emoji: '🌐' },
+    { path: '/social/clubs', label: '棋社', icon: Building2, emoji: '🏛️' },
+    { path: '/social/messages', label: '私信', icon: MessageCircle, emoji: '💬', badge: unreadCount > 0 ? unreadCount : undefined },
+    { path: '/social/community', label: '社区', icon: Users, emoji: '📝' },
+    { path: '/social/wallet', label: `${coinBalance.toLocaleString()} 💰`, icon: Wallet, emoji: '💰', isCoin: true },
   ];
 
   const filteredNavItems = navItems.filter(item => 
@@ -47,8 +76,29 @@ export default function MainLayout({ children }: LayoutProps) {
                           variant={location.pathname === item.path ? 'secondary' : 'ghost'}
                           className="w-full justify-start"
                         >
-                          <Icon className="mr-2 h-4 w-4" />
+                          <span className="mr-2">{item.emoji}</span>
                           {item.label}
+                        </Button>
+                      </Link>
+                    );
+                  })}
+                  <div className="border-t my-2" />
+                  <p className="text-xs text-muted-foreground px-3 mb-1">快捷入口</p>
+                  {quickLinks.map(item => {
+                    const Icon = item.icon;
+                    return (
+                      <Link key={item.path} to={item.path}>
+                        <Button
+                          variant={location.pathname === item.path ? 'secondary' : 'ghost'}
+                          className="w-full justify-start"
+                        >
+                          <span className="mr-2">{item.emoji}</span>
+                          {item.label}
+                          {item.badge && (
+                            <Badge variant="destructive" className="ml-auto h-5 w-5 p-0 flex items-center justify-center text-xs">
+                              {item.badge}
+                            </Badge>
+                          )}
                         </Button>
                       </Link>
                     );
@@ -58,10 +108,11 @@ export default function MainLayout({ children }: LayoutProps) {
             </Sheet>
 
             <Link to="/" className="flex items-center gap-2">
+              <span className="text-xl kid-bounce">🐼</span>
               <span className="text-xl font-bold gradient-text">少儿围棋</span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-1">
+            <nav className="hidden lg:flex items-center gap-1">
               {filteredNavItems.map(item => {
                 const Icon = item.icon;
                 return (
@@ -70,8 +121,32 @@ export default function MainLayout({ children }: LayoutProps) {
                       variant={location.pathname === item.path ? 'secondary' : 'ghost'}
                       size="sm"
                     >
-                      <Icon className="mr-2 h-4 w-4" />
+                      <span className="mr-1.5">{item.emoji}</span>
                       {item.label}
+                    </Button>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* 新功能快捷入口 - 始终显示 */}
+            <nav className="hidden md:flex items-center gap-1">
+              {quickLinks.map(item => {
+                const Icon = item.icon;
+                return (
+                  <Link key={item.path} to={item.path}>
+                    <Button
+                      variant={item.isCoin ? 'secondary' : location.pathname === item.path ? 'secondary' : 'outline'}
+                      size="sm"
+                      className={item.isCoin ? 'bg-yellow-500/20 hover:bg-yellow-500/30 border-yellow-500/50 text-yellow-700' : 'border-primary/50'}
+                    >
+                      <Icon className={`h-4 w-4 ${item.isCoin ? 'text-yellow-600' : ''}`} />
+                      <span className="ml-1.5">{item.label}</span>
+                      {item.badge && !item.isCoin && (
+                        <Badge variant="destructive" className="ml-1 h-4 w-4 p-0 flex items-center justify-center text-xs">
+                          {item.badge}
+                        </Badge>
+                      )}
                     </Button>
                   </Link>
                 );

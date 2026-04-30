@@ -11,79 +11,82 @@ All colors MUST be HSL.
   :root {
     --radius: 0.125rem;
     /* 宣纸白背景 */
-    --background: 40 15% 97%;
-    --foreground: 0 0% 10%;
+    --background: 40 20% 96%;
+    --foreground: 0 0% 15%;
     /* 卡片使用纯白 */
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-    /* 竹叶青主色 */
-    --primary: 145 22% 36%;
+    --card-foreground: 0 0% 15%;
+    /* 竹叶青主色 - 更明亮 */
+    --primary: 165 60% 38%;
     --primary-foreground: 0 0% 98%;
     /* 浅竹青辅助色 */
-    --secondary: 145 15% 88%;
-    --secondary-foreground: 145 22% 20%;
+    --secondary: 145 25% 88%;
+    --secondary-foreground: 145 30% 25%;
     /* 柔和灰色 */
-    --muted: 40 10% 92%;
-    --muted-foreground: 0 0% 45%;
-    /* 极浅竹青强调色 */
-    --accent: 145 20% 95%;
-    --accent-foreground: 145 22% 25%;
+    --muted: 40 15% 92%;
+    --muted-foreground: 0 0% 50%;
+    /* 亮绿强调色 */
+    --accent: 142 70% 92%;
+    --accent-foreground: 145 40% 25%;
     /* 朱砂红警示色 */
-    --destructive: 0 55% 53%;
+    --destructive: 0 60% 50%;
     --destructive-foreground: 0 0% 98%;
     /* 边框和输入框 */
     --border: 0 0% 88%;
     --input: 0 0% 88%;
-    --ring: 145 22% 36%;
-    /* 图表色 */
-    --chart-1: 145 22% 36%;
-    --chart-2: 0 55% 53%;
-    --chart-3: 40 60% 50%;
-    --chart-4: 200 40% 50%;
-    --chart-5: 280 40% 50%;
+    --ring: 165 60% 38%;
+    /* 图表色 - 更鲜艳 */
+    --chart-1: 165 60% 38%;
+    --chart-2: 15 80% 55%;
+    --chart-3: 45 85% 55%;
+    --chart-4: 200 70% 55%;
+    --chart-5: 280 65% 58%;
     /* 侧边栏 */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 0 0% 20%;
-    --sidebar-primary: 145 22% 36%;
+    --sidebar-primary: 165 60% 38%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 145 20% 95%;
-    --sidebar-accent-foreground: 145 22% 25%;
+    --sidebar-accent: 142 70% 92%;
+    --sidebar-accent-foreground: 145 40% 25%;
     --sidebar-border: 0 0% 90%;
-    --sidebar-ring: 145 22% 36%;
+    --sidebar-ring: 165 60% 38%;
+    /* 青少年主题色 */
+    --theme-coral: 15 90% 65%;
+    --theme-sky: 200 80% 60%;
+    --theme-sunshine: 45 95% 58%;
+    --theme-mint: 165 55% 65%;
   }
 
   .dark {
     /* 深色模式：深竹青背景 */
-    --background: 145 25% 8%;
+    --background: 165 30% 10%;
     --foreground: 0 0% 95%;
-    --card: 145 20% 12%;
+    --card: 165 25% 14%;
     --card-foreground: 0 0% 95%;
-    --popover: 145 20% 12%;
+    --popover: 165 25% 14%;
     --popover-foreground: 0 0% 95%;
     /* 浅竹青主色 */
-    --primary: 145 25% 65%;
-    --primary-foreground: 145 25% 8%;
+    --primary: 165 55% 60%;
+    --primary-foreground: 165 30% 10%;
     /* 深竹青辅助色 */
-    --secondary: 145 20% 18%;
+    --secondary: 165 25% 20%;
     --secondary-foreground: 0 0% 95%;
-    --muted: 145 15% 20%;
+    --muted: 165 20% 22%;
     --muted-foreground: 0 0% 65%;
     /* 深竹青强调色 */
-    --accent: 145 20% 15%;
+    --accent: 165 25% 18%;
     --accent-foreground: 0 0% 95%;
     /* 暗朱砂红 */
-    --destructive: 0 50% 40%;
+    --destructive: 15 55% 50%;
     --destructive-foreground: 0 0% 95%;
-    --border: 145 15% 22%;
-    --input: 145 15% 22%;
-    --ring: 145 25% 65%;
-    --chart-1: 145 25% 55%;
-    --chart-2: 0 50% 50%;
-    --chart-3: 40 55% 45%;
-    --chart-4: 200 45% 45%;
-    --chart-5: 280 45% 45%;
+    --border: 165 20% 24%;
+    --input: 165 20% 24%;
+    --ring: 165 55% 60%;
+    --chart-1: 165 55% 55%;
+    --chart-2: 15 70% 55%;
+    --chart-3: 45 80% 55%;
+    --chart-4: 200 65% 55%;
+    --chart-5: 280 60% 55%;
     --sidebar-background: 145 25% 10%;
     --sidebar-foreground: 0 0% 90%;
     --sidebar-primary: 145 25% 65%;
@@ -139,5 +142,614 @@ All colors MUST be HSL.
     background-clip: text;
     -webkit-text-fill-color: transparent;
     color: transparent;
+  }
+
+  /* ===== 青少年主题动画 ===== */
+
+  /* 吉祥物弹跳入场 */
+  @keyframes mascotBounceIn {
+    0% { transform: translateY(30px) scale(0.5); opacity: 0; }
+    60% { transform: translateY(-10px) scale(1.1); }
+    80% { transform: translateY(5px) scale(0.95); }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  .mascot-bounce-in {
+    animation: mascotBounceIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  /* 卡片弹性悬浮 */
+  @keyframes cardFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-3px) rotate(0.5deg); }
+    75% { transform: translateY(-3px) rotate(-0.5deg); }
+  }
+
+  .card-float {
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .card-float:hover {
+    transform: translateY(-6px) scale(1.02);
+    box-shadow: 0 20px 40px -10px rgba(0,0,0,0.15);
+  }
+  .card-float:active {
+    transform: scale(0.98);
+  }
+
+  /* 彩虹渐变文字 */
+  @keyframes rainbowShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .rainbow-text {
+    background: linear-gradient(135deg, hsl(15 90% 60%), hsl(45 95% 55%), hsl(165 60% 40%), hsl(200 80% 60%), hsl(280 65% 55%));
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: rainbowShift 4s ease infinite;
+  }
+
+  /* 星星闪烁 */
+  @keyframes starTwinkle {
+    0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+    50% { opacity: 0.5; transform: scale(1.2) rotate(180deg); }
+  }
+
+  .star-twinkle {
+    animation: starTwinkle 2s ease-in-out infinite;
+  }
+
+  /* 云朵漂浮 */
+  @keyframes cloudFloat {
+    0%, 100% { transform: translateX(0) translateY(0); }
+    50% { transform: translateX(10px) translateY(-5px); }
+  }
+
+  .cloud-float {
+    animation: cloudFloat 6s ease-in-out infinite;
+  }
+
+  /* 背景装饰旋转 */
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .spin-slow {
+    animation: spin-slow 20s linear infinite;
+  }
+
+  /* 按钮点击弹跳 */
+  .btn-bounce:active {
+    animation: btnBounce 0.3s ease;
+  }
+
+  @keyframes btnBounce {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+  }
+
+  /* 进度条脉冲 */
+  @keyframes progressPulse {
+    0%, 100% { box-shadow: 0 0 5px hsl(var(--primary) / 0.3); }
+    50% { box-shadow: 0 0 20px hsl(var(--primary) / 0.6); }
+  }
+
+  .progress-pulse {
+    animation: progressPulse 2s ease-in-out infinite;
+  }
+
+  /* 儿童友好的大圆角卡片 */
+  .card-kid {
+    @apply rounded-3xl border-0;
+    background: linear-gradient(145deg, hsl(0 0% 100%), hsl(0 0% 98%));
+    box-shadow: 0 4px 20px -5px rgba(0,0,0,0.08);
+  }
+
+  /* 趣味浮动动画 */
+  .float-gentle {
+    animation: floatGentle 3s ease-in-out infinite;
+  }
+
+  @keyframes floatGentle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+
+  /* 成功庆祝效果 */
+  .celebrate {
+    animation: celebrate 0.6s ease-out;
+  }
+
+  @keyframes celebrate {
+    0% { transform: scale(1); }
+    25% { transform: scale(1.15) rotate(-3deg); }
+    50% { transform: scale(1.1) rotate(3deg); }
+    75% { transform: scale(1.05) rotate(-1deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+
+  /* 进度条彩色渐变 */
+  .progress-fun > div {
+    background: linear-gradient(90deg, hsl(var(--primary)), hsl(40 60% 50%), hsl(var(--destructive)));
+    border-radius: 9999px;
+  }
+
+  /* 胜率条渐变背景 */
+  .winrate-bar-bg {
+    background: linear-gradient(90deg, #1a1a1a var(--black-rate, 50%), #f0f0f0 var(--black-rate, 50%));
+    transition: all 0.5s ease-out;
+  }
+
+  /* 读秒闪烁警告 */
+  @keyframes byoyomi-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.05); }
+  }
+
+  .byoyomi-warning {
+    animation: byoyomi-pulse 0.8s ease-in-out infinite;
+  }
+
+  /* 对局卡片悬浮效果 */
+  .game-card-hover {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .game-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15);
+  }
+  .game-card-hover:active {
+    transform: scale(0.98);
+  }
+
+  /* 近期对局圆点动画 */
+  .game-result-dot {
+    transition: transform 0.2s ease;
+  }
+  .game-result-dot:hover {
+    transform: scale(1.25) !important;
+    z-index: 10;
+  }
+
+  /* 移动端优化：隐藏横向滚动 */
+  .mobile-no-scroll {
+    overflow-x: hidden;
+  }
+
+  /* 渐入动画 */
+  @keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-slide-up {
+    animation: slideUpFade 0.4s ease-out both;
+  }
+
+  .animate-delay-1 { animation-delay: 0.05s; }
+  .animate-delay-2 { animation-delay: 0.1s; }
+  .animate-delay-3 { animation-delay: 0.15s; }
+  .animate-delay-4 { animation-delay: 0.2s; }
+
+  /* 撒花下落动画 */
+  .confetti-fall {
+    animation: confettiFall var(--confetti-duration, 2s) ease-in forwards;
+  }
+
+  @keyframes confettiFall {
+    0% {
+      transform: translateY(0) rotate(0deg) scale(1);
+      opacity: 1;
+    }
+    80% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(85vh) rotate(720deg) scale(0.5);
+      opacity: 0;
+    }
+  }
+
+  /* 卡通气泡动画 */
+  .bubble-pop {
+    animation: bubblePop 0.4s ease-out;
+  }
+
+  @keyframes bubblePop {
+    0% { transform: scale(0.5); opacity: 0; }
+    60% { transform: scale(1.08); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* 吉祥物摇摆动画 */
+  .mascot-wiggle {
+    animation: mascotWiggle 2s ease-in-out infinite;
+  }
+
+  @keyframes mascotWiggle {
+    0%, 100% { transform: rotate(0deg); }
+    15% { transform: rotate(5deg); }
+    30% { transform: rotate(-5deg); }
+    45% { transform: rotate(3deg); }
+    60% { transform: rotate(0deg); }
+  }
+
+  /* 呼吸光环效果 */
+  .glow-pulse {
+    animation: glowPulse 2s ease-in-out infinite;
+  }
+
+  @keyframes glowPulse {
+    0%, 100% { box-shadow: 0 0 5px rgba(165, 60%, 38%, 0.2); }
+    50% { box-shadow: 0 0 20px rgba(165, 60%, 38%, 0.4), 0 0 40px rgba(165, 60%, 38%, 0.1); }
+  }
+
+  /* 卡通角色跳动 */
+  .kid-bounce {
+    animation: kidBounce 1.5s ease-in-out infinite;
+  }
+
+  @keyframes kidBounce {
+    0%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-10px); }
+    60% { transform: translateY(-4px); }
+  }
+
+  /* 儿童友好：趣味弹跳动画 */
+  .bounce-in {
+    animation: bounceIn 0.5s ease-out;
+  }
+
+  @keyframes bounceIn {
+    0% { transform: scale(0.3); opacity: 0; }
+    50% { transform: scale(1.05); }
+    70% { transform: scale(0.95); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* 星星闪烁 */
+  .sparkle {
+    animation: sparkle 1.5s ease-in-out infinite;
+  }
+
+  @keyframes sparkle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.15); }
+  }
+
+  /* ===== 故事场景动画 ===== */
+
+  /* 角色入场动画 */
+  .story-character-enter {
+    animation: characterEnter 0.6s ease-out both;
+  }
+
+  @keyframes characterEnter {
+    0% { transform: translateY(30px) scale(0.8); opacity: 0; }
+    60% { transform: translateY(-5px) scale(1.02); }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  /* 对话气泡弹出 */
+  .story-dialog-pop {
+    animation: dialogPop 0.4s ease-out 0.5s both;
+  }
+
+  @keyframes dialogPop {
+    0% { transform: scale(0.5) translateY(10px); opacity: 0; }
+    60% { transform: scale(1.1) translateY(-2px); }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+
+  /* 树叶飘落 */
+  .leaf-fall {
+    animation: leafFall var(--leaf-duration, 5s) ease-in-out infinite;
+  }
+
+  @keyframes leafFall {
+    0% { transform: translateY(-10%) rotate(0deg) translateX(0); opacity: 0.8; }
+    25% { transform: translateY(25vh) rotate(90deg) translateX(20px); }
+    50% { transform: translateY(50vh) rotate(180deg) translateX(-15px); opacity: 0.6; }
+    75% { transform: translateY(75vh) rotate(270deg) translateX(10px); }
+    100% { transform: translateY(100vh) rotate(360deg) translateX(-5px); opacity: 0; }
+  }
+
+  /* 闪光效果 */
+  .sparkle-float {
+    animation: sparkleFloat 2s ease-in-out infinite;
+  }
+
+  @keyframes sparkleFloat {
+    0%, 100% { transform: scale(0.8) translateY(0); opacity: 0.3; }
+    50% { transform: scale(1.2) translateY(-8px); opacity: 1; }
+  }
+
+  /* 腐烂效果 */
+  .decay-animate {
+    animation: decayAnim 3s ease-in-out infinite;
+  }
+
+  @keyframes decayAnim {
+    0%, 20% { opacity: 0; transform: scale(0.8); }
+    40% { opacity: 1; transform: scale(1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: scale(0.9); }
+  }
+
+  /* 风吹效果 */
+  .wind-blow {
+    animation: windBlow 3s ease-in-out infinite;
+  }
+
+  @keyframes windBlow {
+    0% { transform: translateX(-100%); opacity: 0; }
+    20% { opacity: 0.5; }
+    80% { opacity: 0.5; }
+    100% { transform: translateX(calc(100vw + 100px)); opacity: 0; }
+  }
+
+  /* 时光流转效果 */
+  @keyframes timeLapse {
+    0% { opacity: 0; }
+    20% { opacity: 0.8; }
+    80% { opacity: 0.8; }
+    100% { opacity: 0; }
+  }
+
+  .animate-time-lapse {
+    animation: timeLapse 4s ease-in-out;
+  }
+
+  /* 角色入场动画增强 */
+  .story-character-enter {
+    animation: characterEnter 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  @keyframes characterEnter {
+    0% { transform: translateY(50px) scale(0.5); opacity: 0; }
+    50% { transform: translateY(-10px) scale(1.05); }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  /* 棋盘棋子落子动画 */
+  @keyframes stoneDrop {
+    0% { transform: translateY(-20px) scale(0.5); opacity: 0; }
+    60% { transform: translateY(5px) scale(1.1); }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  .animate-stone-drop {
+    animation: stoneDrop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* 故事标题动画 */
+  .story-title-pop {
+    animation: storyTitlePop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  @keyframes storyTitlePop {
+    0% { transform: scale(0.8); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ===== 多场景故事动画 ===== */
+
+  /* 角色多场景入场动画 */
+  .animate-character-enter {
+    animation: characterSceneEnter 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  @keyframes characterSceneEnter {
+    0% { transform: translateY(60px) scale(0.6); opacity: 0; }
+    50% { transform: translateY(-15px) scale(1.08); }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  /* 场景淡入淡出切换 */
+  .scene-fade-enter {
+    animation: sceneFadeEnter 0.6s ease-out both;
+  }
+
+  @keyframes sceneFadeEnter {
+    0% { opacity: 0; transform: scale(1.02); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  /* 角色呼吸动画 */
+  .animate-character-breathe {
+    animation: characterBreathe 3s ease-in-out infinite;
+  }
+
+  @keyframes characterBreathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+  }
+
+  /* 角色弹跳动画 */
+  .animate-character-jump {
+    animation: characterJump 1s ease-in-out infinite;
+  }
+
+  @keyframes characterJump {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+
+  /* 情绪波动动画 */
+  .animate-emotion-wave {
+    animation: emotionWave 2s ease-in-out infinite;
+  }
+
+  @keyframes emotionWave {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    25% { transform: scale(1.05) rotate(-2deg); }
+    75% { transform: scale(1.05) rotate(2deg); }
+  }
+
+  /* 胜利庆祝动画 */
+  .animate-victory {
+    animation: victoryCelebrate 0.8s ease-out;
+  }
+
+  @keyframes victoryCelebrate {
+    0% { transform: scale(1); }
+    25% { transform: scale(1.2) rotate(-5deg); }
+    50% { transform: scale(1.15) rotate(5deg); }
+    75% { transform: scale(1.1) rotate(-2deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+
+  /* 思绪飘动动画 */
+  .animate-thought {
+    animation: thoughtFloat 3s ease-in-out infinite;
+  }
+
+  @keyframes thoughtFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.7; }
+    50% { transform: translateY(-10px) rotate(5deg); opacity: 1; }
+  }
+
+  /* 棋盘闪烁效果 */
+  .animate-board-glow {
+    animation: boardGlow 2s ease-in-out infinite;
+  }
+
+  @keyframes boardGlow {
+    0%, 100% { box-shadow: 0 0 10px rgba(165, 60%, 38%, 0.2); }
+    50% { box-shadow: 0 0 25px rgba(165, 60%, 38%, 0.5), 0 0 50px rgba(165, 60%, 38%, 0.2); }
+  }
+
+  /* 背景云雾飘动 */
+  .animate-cloud-drift {
+    animation: cloudDrift 20s linear infinite;
+  }
+
+  @keyframes cloudDrift {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+
+  /* 星光闪烁增强版 */
+  .animate-stars-twinkle {
+    animation: starsTwinkle 1.5s ease-in-out infinite;
+  }
+
+  @keyframes starsTwinkle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.3); }
+  }
+
+  /* 月亮光晕动画 */
+  .animate-moon-glow {
+    animation: moonGlow 4s ease-in-out infinite;
+  }
+
+  @keyframes moonGlow {
+    0%, 100% { box-shadow: 0 0 20px rgba(255, 236, 128, 0.3); }
+    50% { box-shadow: 0 0 40px rgba(255, 236, 128, 0.6), 0 0 80px rgba(255, 236, 128, 0.3); }
+  }
+
+  /* 紧张气氛动画 */
+  .animate-tension {
+    animation: tensionShake 0.1s ease-in-out infinite;
+  }
+
+  @keyframes tensionShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-1px); }
+    75% { transform: translateX(1px); }
+  }
+
+  /* ===== 插画背景动画 ===== */
+
+  /* 慢速漂浮动画 */
+  .animate-float-slow {
+    animation: floatSlow 6s ease-in-out infinite;
+  }
+
+  @keyframes floatSlow {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-8px) rotate(2deg); }
+    50% { transform: translateY(-4px) rotate(0deg); }
+    75% { transform: translateY(-10px) rotate(-2deg); }
+  }
+
+  /* 脉冲动画 */
+  .animate-pulse-slow {
+    animation: pulseSlow 3s ease-in-out infinite;
+  }
+
+  @keyframes pulseSlow {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50% { transform: scale(1.05); opacity: 1; }
+  }
+
+  /* 闪烁动画 */
+  .animate-twinkle {
+    animation: twinkle 2s ease-in-out infinite;
+  }
+
+  @keyframes twinkle {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  /* 飞鸟动画 */
+  .animate-fly-bird {
+    animation: flyBird 15s linear infinite;
+  }
+
+  @keyframes flyBird {
+    0% { transform: translateX(0) translateY(0); }
+    25% { transform: translateX(100px) translateY(-20px); }
+    50% { transform: translateX(200px) translateY(10px); }
+    75% { transform: translateX(300px) translateY(-15px); }
+    100% { transform: translateX(400px) translateY(0); }
+  }
+
+  /* 微弹动画 */
+  .animate-bounce-subtle {
+    animation: bounceSubtle 2s ease-in-out infinite;
+  }
+
+  @keyframes bounceSubtle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+
+  /* 子动画 */
+  @keyframes subPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+
+  .animate-pulse-subtle {
+    animation: subPulse 2s ease-in-out infinite;
+  }
+
+  /* 场景切换滑入 */
+  .animate-scene-slide-in {
+    animation: sceneSlideIn 0.5s ease-out both;
+  }
+
+  @keyframes sceneSlideIn {
+    0% { opacity: 0; transform: translateX(30px); }
+    100% { opacity: 1; transform: translateX(0); }
+  }
+
+  /* 背景切换渐变 */
+  .animate-bg-transition {
+    animation: bgTransition 1s ease-in-out;
+  }
+
+  @keyframes bgTransition {
+    0% { opacity: 0.5; filter: brightness(1.2); }
+    50% { opacity: 0.8; filter: brightness(1); }
+    100% { opacity: 1; filter: brightness(1); }
   }
 }

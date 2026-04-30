@@ -136,13 +136,60 @@ export default {
                         opacity: '1',
                         transform: 'translateX(0)'
                     }
+                },
+                'stone-drop': {
+                    '0%': {
+                        transform: 'scale(0) translateY(-20px)',
+                        opacity: '0'
+                    },
+                    '50%': {
+                        transform: 'scale(1.1) translateY(0)',
+                        opacity: '1'
+                    },
+                    '100%': {
+                        transform: 'scale(1) translateY(0)',
+                        opacity: '1'
+                    }
+                },
+                'pulse-subtle': {
+                    '0%, 100%': {
+                        opacity: '1'
+                    },
+                    '50%': {
+                        opacity: '0.5'
+                    }
+                },
+                'wiggle': {
+                    '0%, 100%': {
+                        transform: 'rotate(0deg)'
+                    },
+                    '25%': {
+                        transform: 'rotate(-10deg)'
+                    },
+                    '75%': {
+                        transform: 'rotate(10deg)'
+                    }
+                },
+                'fade-in-up': {
+                    from: {
+                        opacity: '0',
+                        transform: 'translateY(20px)'
+                    },
+                    to: {
+                        opacity: '1',
+                        transform: 'translateY(0)'
+                    }
                 }
             },
             animation: {
                 'accordion-down': 'accordion-down 0.2s ease-out',
                 'accordion-up': 'accordion-up 0.2s ease-out',
                 'fade-in': 'fade-in 0.5s ease-out',
-                'slide-in': 'slide-in 0.5s ease-out'
+                'slide-in': 'slide-in 0.5s ease-out',
+                'stone-drop': 'stone-drop 0.4s ease-out forwards',
+                'pulse-subtle': 'pulse-subtle 1.5s ease-in-out infinite',
+                'wiggle': 'wiggle 0.5s ease-in-out',
+                'fade-in-up': 'fade-in-up 0.5s ease-out forwards'
             }
         }
     },

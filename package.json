@@ -3,8 +3,11 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "echo 'Do not use this command, only use lint to check'",
-    "build": "echo 'Do not use this command, only use lint to check'",
+    "dev": "vite --port 5175",
+    "dev:ai": "concurrently \"vite --port 5175\" \"cd ../go-server && python app.py\"",
+    "build": "vite build --config vite.config.prod.ts",
+    "build:dev": "vite build",
+    "preview": "vite preview --port 4173",
     "lint": "tsgo -p tsconfig.check.json; npx biome lint; .rules/check.sh;npx tailwindcss -i ./src/index.css -o /dev/null 2>&1 | grep -E '^(CssSyntaxError|Error):.*' || true;.rules/testBuild.sh"
   },
   "dependencies": {
@@ -83,6 +86,8 @@
     "@typescript/native-preview": "7.0.0-dev.20260303.1",
     "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.4.27",
+    "concurrently": "^9.2.1",
+    "esbuild": "^0.27.7",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.11",
     "typescript": "~5.9.3",
