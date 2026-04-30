@@ -2953,3 +2953,228 @@ export async function updateClubGameStats(clubId: string, blackPlayerId: string,
     p_result: result,
   });
 }
+
+// ========== 好友对战邀请 ==========
+
+export interface FriendInvitation {
+  id: string;
+  inviter_id: string;
+  invited_id: string;
+  board_size: number;
+  time_control: string;
+  handicap_mode: string;
+  handicap_count: number;
+  status: 'pending' | 'accepted' | 'rejected' | 'expired';
+  created_at: string;
+  inviter?: Profile;
+  invited?: Profile;
+}
+
+/** 发起好友对战邀请 */
+export async function createFriendInvitation(
+  inviterId: string,
+  invitedId: string,
+  boardSize: number,
+  timeControl: string,
+  handicapMode: string,
+  handicapCount: number
+): Promise<FriendInvitation | null> {
+  // 删除旧的 pending 邀请
+  await supabase
+    .from('friend_invitations')
+    .delete()
+    .eq('inviter_id', inviterId)
+    .eq('invited_id', invitedId)
+    .eq('status', 'pending');
+
+  const { data, error } = await supabase
+    .from('friend_invitations')
+    .insert({
+      inviter_id: inviterId,
+      invited_id: invitedId,
+      board_size: boardSize,
+      time_control: timeControl,
+      handicap_mode: handicapMode,
+      handicap_count: handicapCount,
+      status: 'pending',
+    })
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    console.error('创建好友邀请失败:', error);
+    return null;
+  }
+
+  return data;
+}
+
+/** 获取收到的邀请列表 */
+export async function getReceivedInvitations(userId: string): Promise<FriendInvitation[]> {
+  const { data, error } = await supabase
+    .from('friend_invitations')
+    .select('*')
+    .eq('invited_id', userId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('获取邀请列表失败:', error);
+    return [];
+  }
+
+  if (!data || data.length === 0) return [];
+
+  // 获取邀请者信息
+  const inviterIds = data.map(i => i.inviter_id);
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('*')
+    .in('id', inviterIds);
+
+  const profileMap = new Map((profiles ?? []).map(p => [p.id, p]));
+
+  return data.map(inv => ({
+    ...inv,
+    inviter: profileMap.get(inv.inviter_id),
+  }));
+}
+
+/** 接受好友邀请 */
+export async function acceptFriendInvitation(invitationId: string, userId: string): Promise<{ success: boolean; gameId?: string }> {
+  // 1. 更新邀请状态
+  const { error: updateError } = await supabase
+    .from('friend_invitations')
+    .update({ status: 'accepted' })
+    .eq('id', invitationId)
+    .eq('invited_id', userId)
+    .eq('status', 'pending');
+
+  if (updateError) {
+    console.error('接受邀请失败:', updateError);
+    return { success: false };
+  }
+
+  // 2. 获取邀请信息
+  const { data: invitation } = await supabase
+    .from('friend_invitations')
+    .select('*')
+    .eq('id', invitationId)
+    .maybeSingle();
+
+  if (!invitation) return { success: false };
+
+  // 3. 创建游戏
+  const userIsBlack = Math.random() < 0.5;
+  const blackPlayerId = userIsBlack ? userId : invitation.inviter_id;
+  const whitePlayerId = userIsBlack ? invitation.inviter_id : userId;
+
+  const { data: game, error: gameError } = await supabase
+    .from('games')
+    .insert({
+      type: 'human',
+      status: 'ongoing',
+      result: null,
+      black_player_id: blackPlayerId,
+      white_player_id: whitePlayerId,
+      board_size: invitation.board_size,
+      moves: [],
+      end_type: null,
+      score_detail: null,
+      black_captures: 0,
+      white_captures: 0,
+      move_count: 0,
+    })
+    .select()
+    .maybeSingle();
+
+  if (gameError || !game) {
+    console.error('创建游戏失败:', gameError);
+    return { success: false };
+  }
+
+  // 4. 更新邀请关联游戏ID
+  await supabase
+    .from('friend_invitations')
+    .update({ game_id: game.id })
+    .eq('id', invitationId);
+
+  return { success: true, gameId: game.id };
+}
+
+/** 拒绝好友邀请 */
+export async function rejectFriendInvitation(invitationId: string, userId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('friend_invitations')
+    .update({ status: 'rejected' })
+    .eq('id', invitationId)
+    .eq('invited_id', userId)
+    .eq('status', 'pending');
+
+  return !error;
+}
+
+/** 监听收到的邀请（实时） */
+export function subscribeToFriendInvitations(
+  userId: string,
+  onNewInvitation: (invitation: FriendInvitation) => void
+): () => void {
+  const channel = supabase
+    .channel('friend-invitations-' + userId)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'friend_invitations',
+      filter: `invited_id=eq.${userId}`,
+    }, async (payload) => {
+      const inv = payload.new as FriendInvitation;
+      // 获取邀请者信息
+      const { data: inviter } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', inv.inviter_id)
+        .maybeSingle();
+      
+      onNewInvitation({ ...inv, inviter: inviter ?? undefined });
+    })
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}
+
+/** 监听邀请状态变化（被邀请方接受后，邀请方收到通知） */
+export function subscribeToInvitationAccepted(
+  userId: string,
+  onAccepted: (gameId: string, myColor: 'black' | 'white') => void
+): () => void {
+  const channel = supabase
+    .channel('invitation-accepted-' + userId)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'friend_invitations',
+      filter: `inviter_id=eq.${userId}`,
+    }, async (payload) => {
+      const inv = payload.new as FriendInvitation;
+      if (inv.status === 'accepted' && inv.game_id) {
+        // 获取我是什么颜色
+        const { data: game } = await supabase
+          .from('games')
+          .select('black_player_id')
+          .eq('id', inv.game_id)
+          .maybeSingle();
+        
+        if (game) {
+          const myColor = game.black_player_id === userId ? 'black' : 'white';
+          onAccepted(inv.game_id, myColor);
+        }
+      }
+    })
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}

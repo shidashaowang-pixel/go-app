@@ -18,14 +18,23 @@ import {
   FlaskConical, ChevronLeft, X, RotateCcw, Swords
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { tryCreateGame, waitForGame, startFriendMatch, checkForPendingGame } from '@/lib/matchmaking-v3';
+import { tryCreateGame, waitForGame } from '@/lib/matchmaking-v3';
+import { 
+  createFriendInvitation, 
+  getReceivedInvitations, 
+  acceptFriendInvitation, 
+  rejectFriendInvitation,
+  subscribeToFriendInvitations,
+  subscribeToInvitationAccepted,
+  type FriendInvitation 
+} from '@/db/api';
 import { getRankInfo } from '@/pages/Home';
 import {
   playLevelUpSound, playWrongSound,
   speak, stopSpeak, getLevelUpPhrase,
 } from '@/lib/sounds';
 
-type MatchState = 'idle' | 'searching' | 'matched' | 'playing' | 'finished';
+type MatchState = 'idle' | 'searching' | 'matched' | 'playing' | 'finished' | 'waiting_friend';
 
 interface OnlinePlayer {
   id: string;
@@ -348,10 +357,9 @@ export default function HumanGame() {
       username: friend.username,
       rating: friend.rating,
     });
-    setMatchState('matched');
 
-    // 邀请方直接创建游戏
-    const result = await startFriendMatch(
+    // 发起邀请
+    const invitation = await createFriendInvitation(
       user.id,
       friendId,
       boardSize,
@@ -360,24 +368,91 @@ export default function HumanGame() {
       handicapCount
     );
 
-    if (!result.success) {
+    if (!invitation) {
       toast.error('发起对战失败');
       setMatchState('idle');
       return;
     }
 
-    // 获取我创建的游戏
-    const gameResult = await checkForPendingGame(user.id);
-    if (gameResult) {
-      setGameId(gameResult.gameId);
-      setCurrentColor(gameResult.myColor);
-      setMatchState('playing');
-      joinGameRoom(gameResult.gameId);
+    // 进入等待状态
+    setMatchState('waiting_friend');
+    toast.success(`已向 ${friend.nickname} 发送对战邀请，等待对方响应...`);
+  };
+
+  // 处理收到的好友邀请
+  const handleIncomingInvitation = async (invitation: FriendInvitation) => {
+    if (matchState === 'playing' || matchState === 'waiting_friend') return;
+    if (!user) return;
+
+    const inviter = invitation.inviter;
+    if (!inviter) return;
+
+    // 弹出确认框
+    const confirmed = window.confirm(
+      `${inviter.nickname || inviter.username} 邀请你进行 ${invitation.board_size}x${invitation.board_size} 对战，是否接受？`
+    );
+
+    if (confirmed) {
+      // 接受邀请
+      const result = await acceptFriendInvitation(invitation.id, user.id);
+      
+      if (result.success && result.gameId) {
+        // 设置对手信息
+        setOpponent({
+          id: inviter.id,
+          nickname: inviter.nickname,
+          username: inviter.username,
+          rating: inviter.rating,
+        });
+        
+        // 获取我是什么颜色
+        const { data: game } = await supabase
+          .from('games')
+          .select('black_player_id')
+          .eq('id', result.gameId)
+          .maybeSingle();
+        
+        const myColor = game?.black_player_id === user.id ? 'black' : 'white';
+        
+        setGameId(result.gameId);
+        setCurrentColor(myColor);
+        setMatchState('playing');
+        joinGameRoom(result.gameId);
+      } else {
+        toast.error('接受邀请失败');
+      }
     } else {
-      toast.error('游戏创建失败');
-      setMatchState('idle');
+      // 拒绝邀请
+      await rejectFriendInvitation(invitation.id, user.id);
+      toast.info('已拒绝对战邀请');
     }
   };
+
+  // 监听好友邀请
+  useEffect(() => {
+    if (!user) return;
+
+    // 获取已有的邀请
+    getReceivedInvitations(user.id).then(invitations => {
+      invitations.forEach(handleIncomingInvitation);
+    });
+
+    // 监听新邀请
+    const unsubscribeInvite = subscribeToFriendInvitations(user.id, handleIncomingInvitation);
+    
+    // 监听我发起的邀请是否被接受（邀请方）
+    const unsubscribeAccept = subscribeToInvitationAccepted(user.id, (gameId, myColor) => {
+      setGameId(gameId);
+      setCurrentColor(myColor);
+      setMatchState('playing');
+      joinGameRoom(gameId);
+    });
+
+    return () => {
+      unsubscribeInvite();
+      unsubscribeAccept();
+    };
+  }, [user, matchState]);
 
   const joinGameRoom = async (gId: string) => {
     if (!user || !opponent) return;
