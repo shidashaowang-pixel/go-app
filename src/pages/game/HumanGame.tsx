@@ -67,6 +67,12 @@ export default function HumanGame() {
   const [blackTime, setBlackTime] = useState(600); // 黑棋剩余秒数
   const [whiteTime, setWhiteTime] = useState(600); // 白棋剩余秒数
 
+  // 匹配确认相关
+  const [myConfirmed, setMyConfirmed] = useState(false); // 我是否已点击开始
+  const [opponentConfirmed, setOpponentConfirmed] = useState(false); // 对手是否已点击开始
+  const [isRoomCreator, setIsRoomCreator] = useState(false); // 我是否是房间创建者
+  const [joinedGameId, setJoinedGameId] = useState<string | null>(null); // 已加入的游戏ID（另一方用）
+
   // 根据时间设置获取初始秒数
   const getInitialTime = () => {
     switch (timeKey) {
@@ -162,6 +168,11 @@ export default function HumanGame() {
       clearInterval(gameTimerRef.current);
       gameTimerRef.current = null;
     }
+    // 重置确认状态
+    setMyConfirmed(false);
+    setOpponentConfirmed(false);
+    setIsRoomCreator(false);
+    setJoinedGameId(null);
   };
 
   const loadFriends = async () => {
@@ -173,6 +184,32 @@ export default function HumanGame() {
       username: f.username,
       rating: f.rating,
     })));
+  };
+
+  // 检查我是否是创建者（通过比较创建时间）
+  // 谁先进入匹配队列，谁就是创建者
+  const checkIfICreatedTheMatch = async (opponentId: string): Promise<boolean> => {
+    if (!user) return false;
+    
+    const myRecord = await supabase
+      .from('matchmaking')
+      .select('created_at')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    
+    const opponentRecord = await supabase
+      .from('matchmaking')
+      .select('created_at')
+      .eq('user_id', opponentId)
+      .maybeSingle();
+    
+    if (!myRecord || !opponentRecord) return false;
+    
+    // 谁先创建谁就是创建者
+    const myTime = new Date(myRecord.created_at).getTime();
+    const opponentTime = new Date(opponentRecord.created_at).getTime();
+    
+    return myTime < opponentTime;
   };
 
   // ========== 随机匹配 ==========
@@ -197,12 +234,14 @@ export default function HumanGame() {
 
       if (existing && existing.length > 0) {
         // 找到等待中的对手，直接匹配
+        // 对方在等待，我是后来加入的，所以对方是创建者，我是加入者
         const opponentId = existing[0].user_id;
-        await matchWith(opponentId);
+        await matchWith(opponentId, false); // iAmCreator = false
         return;
       }
 
       // 2. 没有对手，自己进入等待队列
+      // 我先进入等待，我是创建者
       const { error } = await supabase
         .from('matchmaking')
         .upsert({
@@ -253,12 +292,16 @@ export default function HumanGame() {
             .maybeSingle();
 
           if (myRecord?.status === 'matched' && myRecord?.matched_with) {
-            // 匹配成功，清理轮询后调用
+            // 匹配成功
+            // 如果是被匹配上的（对方先进入队列），则我不是创建者
+            const iAmCreator = myRecord.created_at && 
+              await checkIfICreatedTheMatch(myRecord.matched_with);
+            
             if (matchPollRef.current) {
               clearInterval(matchPollRef.current);
               matchPollRef.current = null;
             }
-            handleMatchFound(myRecord.matched_with);
+            handleMatchFound(myRecord.matched_with, iAmCreator);
           }
         } catch (e) {
           console.error('轮询错误:', e);
@@ -273,7 +316,7 @@ export default function HumanGame() {
   };
 
   // 匹配某个对手
-  const matchWith = async (opponentId: string) => {
+  const matchWith = async (opponentId: string, iAmCreator: boolean = false) => {
     if (!user) return;
 
     // 更新双方状态为已匹配
@@ -290,10 +333,10 @@ export default function HumanGame() {
     if (searchTimerRef.current) clearInterval(searchTimerRef.current);
     if (matchPollRef.current) clearInterval(matchPollRef.current);
 
-    await handleMatchFound(opponentId);
+    await handleMatchFound(opponentId, iAmCreator);
   };
 
-  const handleMatchFound = async (opponentId: string) => {
+  const handleMatchFound = async (opponentId: string, _iAmCreatorHint: boolean = false) => {
     const { data } = await supabase
       .from('profiles')
       .select('*')
@@ -308,12 +351,27 @@ export default function HumanGame() {
         rating: data.rating,
       };
       setOpponent(matchedOpponent);
-      setMatchState('matched');
+      
+      // 清理计时器
       if (searchTimerRef.current) clearInterval(searchTimerRef.current);
       if (matchPollRef.current) clearInterval(matchPollRef.current);
+      searchTimerRef.current = null;
+      matchPollRef.current = null;
+
+      // 重新判断我是否是创建者（通过创建时间）
+      const iAmCreator = await checkIfICreatedTheMatch(opponentId);
+      console.log('[匹配] 匹配成功，对手:', opponentId, '我是创建者:', iAmCreator);
+      
+      setOpponent(matchedOpponent);
+      setMatchState('matched');
+      
+      // 重置确认状态
+      setMyConfirmed(false);
+      setOpponentConfirmed(false);
+      setIsRoomCreator(iAmCreator);
+      setJoinedGameId(null);
 
       // 显示确认界面，让用户点击"开始"按钮后再进入游戏
-      // 注意：在这里不调用 handleStartGame
     }
   };
 
@@ -329,37 +387,151 @@ export default function HumanGame() {
     setSearchTime(0);
   };
 
-  // ========== 开始对弈 ==========
-  const handleStartGame = async (matchedOpponent?: OnlinePlayer) => {
-    // 如果传入了匹配的 opponent，使用它；否则使用 state 中的 opponent
-    const opponentToUse = matchedOpponent || opponent;
-    if (!user || !opponentToUse) return;
+  // ========== 确认开始（不立即开始游戏） ==========
+  const handleConfirmStart = async () => {
+    if (!user || !opponent) return;
 
-    // 根据模式设置贴目和黑白
-    let komiValue: number;
-    let userIsBlack: boolean;
+    // 设置我的确认状态
+    setMyConfirmed(true);
 
-    if (handicapMode === 'even') {
-      // 分先：有贴目，随机黑白
-      komiValue = boardSize <= 9 ? 5.5 : boardSize <= 13 ? 6.5 : 7.5;
-      userIsBlack = Math.random() < 0.5;
-      setCurrentColor(userIsBlack ? 'black' : 'white');
-    } else if (handicapMode === 'first') {
-      // 让先：无贴目，黑先下
-      komiValue = 0;
-      userIsBlack = true;
-      setCurrentColor('black');
+    if (isRoomCreator) {
+      // 创建者：创建游戏房间
+      await createGameRoom();
     } else {
-      // 让子：无贴目
-      komiValue = 0;
-      userIsBlack = true; // 默认用户执黑
-      setCurrentColor('black');
+      // 加入者：通知创建者我已确认
+      // 更新自己的 confirmed 状态，同时通知创建者
+      await supabase
+        .from('matchmaking')
+        .update({ confirmed: true })
+        .eq('user_id', user.id);
+      
+      // 同时更新对手的 ready_to_play 标记，让对手能收到通知
+      await supabase
+        .from('matchmaking')
+        .update({ ready_to_play: true })
+        .eq('user_id', opponent.id);
+      
+      toast.info('等待房主创建房间...');
+    }
+  };
+
+  // ========== 创建游戏房间（仅创建者调用） ==========
+  const createGameRoom = async () => {
+    if (!user || !opponent) {
+      console.error('[匹配] createGameRoom: 缺少用户或对手信息');
+      return;
     }
 
+    // 黑白分配：随机决定
+    const userIsBlack = currentColor === 'black';
+    const blackPlayerId = userIsBlack ? user.id : opponent.id;
+
+    console.log('[匹配] 创建游戏房间，执', userIsBlack ? '黑' : '白', '棋');
+    console.log('[匹配] 黑棋:', blackPlayerId, '白棋:', userIsBlack ? opponent.id : user.id);
+
+    try {
+      // 创建游戏
+      const komiValue = handicapMode === 'even' 
+        ? (boardSize <= 9 ? 5.5 : boardSize <= 13 ? 6.5 : 7.5)
+        : 0;
+
+      const game = await createGame({
+        type: 'human',
+        status: 'ongoing',
+        result: null,
+        black_player_id: blackPlayerId,
+        white_player_id: userIsBlack ? opponent.id : user.id,
+        ai_difficulty: null,
+        board_size: boardSize,
+        moves: [],
+        end_type: null,
+        score_detail: null,
+        black_captures: 0,
+        white_captures: 0,
+        move_count: 0,
+        duration_seconds: null,
+      });
+
+      if (game?.id) {
+        console.log('[匹配] 游戏创建成功:', game.id);
+        setGameId(game.id);
+        
+        // 更新 matchmaking，记录 game_id
+        const { error: updateError } = await supabase
+          .from('matchmaking')
+          .update({ 
+            status: 'playing',
+            game_id: game.id,
+            black_player_id: blackPlayerId
+          })
+          .eq('user_id', user.id);
+
+        if (updateError) {
+          console.error('[匹配] 更新 matchmaking 失败:', updateError);
+        } else {
+          console.log('[匹配] matchmaking 更新成功');
+        }
+
+        // 进入游戏
+        initGameEngine(userIsBlack, game.id);
+      } else {
+        console.error('[匹配] 游戏创建失败，返回空');
+        toast.error('创建对弈失败');
+        setMyConfirmed(false);
+      }
+    } catch (err) {
+      console.error('[匹配] 创建对弈异常:', err);
+      toast.error('创建对弈失败');
+      setMyConfirmed(false);
+    }
+  };
+
+  // ========== 加入已有游戏（仅加入者调用） ==========
+  const joinGameRoom = async (gId: string) => {
+    if (!user || !opponent) {
+      console.error('[匹配] joinGameRoom: 缺少用户或对手信息');
+      return;
+    }
+
+    console.log('[匹配] 加入游戏房间:', gId);
+    setJoinedGameId(gId);
+    setGameId(gId);
+
+    // 获取游戏信息，确定自己的颜色
+    const { data: gameData, error } = await supabase
+      .from('games')
+      .select('*')
+      .eq('id', gId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[匹配] 获取游戏信息失败:', error);
+      toast.error('加入游戏失败');
+      return;
+    }
+
+    if (!gameData) {
+      console.error('[匹配] 游戏不存在:', gId);
+      toast.error('游戏房间不存在');
+      return;
+    }
+
+    console.log('[匹配] 游戏信息:', gameData);
+    const userIsBlack = gameData.black_player_id === user.id;
+    console.log('[匹配] 我是执', userIsBlack ? '黑' : '白', '棋');
+    initGameEngine(userIsBlack, gId);
+  };
+
+  // ========== 初始化游戏引擎 ==========
+  const initGameEngine = (userIsBlack: boolean, gId: string) => {
+    const komiValue = handicapMode === 'even' 
+      ? (boardSize <= 9 ? 5.5 : boardSize <= 13 ? 6.5 : 7.5)
+      : 0;
+
     const newEngine = new GoEngine(boardSize, komiValue);
+    setCurrentColor(userIsBlack ? 'black' : 'white');
 
     if (handicapMode === 'stones') {
-      // 让子模式下放置棋子
       newEngine.setHandicap(handicapCount);
       if (handicapDirection === 'ai-gives') {
         newEngine.placeHandicapAsWhite();
@@ -367,7 +539,6 @@ export default function HumanGame() {
       } else {
         newEngine.placeHandicap();
         setCurrentColor('white');
-        userIsBlack = false;
       }
     }
 
@@ -382,33 +553,85 @@ export default function HumanGame() {
     const colorText = currentColor === 'black' ? '执黑' : '执白';
     toast.success(`对弈开始！${handicapText}你${colorText}`);
 
-    try {
-      const game = await createGame({
-        type: 'human',
-        status: 'ongoing',
-        result: null,
-        black_player_id: userIsBlack ? user.id : opponentToUse.id,
-        white_player_id: userIsBlack ? opponentToUse.id : user.id,
-        ai_difficulty: null,
-        board_size: boardSize,
-        moves: [],
-        end_type: null,
-        score_detail: null,
-        black_captures: 0,
-        white_captures: 0,
-        move_count: 0,
-        duration_seconds: null,
-      });
-      setGameId(game?.id ?? null);
-
-      // 订阅对手落子的 Realtime 频道
-      if (game?.id) {
-        subscribeToOpponentMoves(game.id);
-      }
-    } catch {
-      toast.error('创建对弈失败');
-    }
+    // 订阅对手落子的 Realtime 频道
+    subscribeToOpponentMoves(gId);
   };
+
+  // 监听对方创建游戏（加入者监听）
+  useEffect(() => {
+    if (matchState !== 'matched' || !user || !opponent || isRoomCreator) return;
+
+    const channel = supabase
+      .channel('match-game-' + user.id)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'matchmaking',
+        filter: `user_id=eq.${opponent.id}`,
+      }, (payload) => {
+        const data = payload.new as { status: string; game_id: string; ready_to_play?: boolean };
+        console.log('[匹配] 加入者收到更新:', data);
+        
+        // 检查是否是对手创建了游戏
+        if (data.status === 'playing' && data.game_id && !joinedGameId) {
+          console.log('[匹配] 对手已创建游戏，加入房间');
+          setOpponentConfirmed(true);
+          joinGameRoom(data.game_id);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [matchState, user, opponent, isRoomCreator, joinedGameId]);
+
+  // 监听对手确认（创建者监听）
+  useEffect(() => {
+    if (matchState !== 'matched' || !user || !opponent || !isRoomCreator) return;
+
+    const channel = supabase
+      .channel('match-confirm-' + user.id)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'matchmaking',
+        filter: `user_id=eq.${opponent.id}`,
+      }, (payload) => {
+        const data = payload.new as { confirmed?: boolean; ready_to_play?: boolean };
+        console.log('[匹配] 创建者收到对手更新:', data);
+        
+        if (data.ready_to_play || data.confirmed) {
+          setOpponentConfirmed(true);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [matchState, user, opponent, isRoomCreator]);
+
+  // 加入者：轮询检查是否已有游戏
+  useEffect(() => {
+    if (matchState !== 'matched' || !user || !opponent || isRoomCreator || joinedGameId) return;
+
+    const pollGameId = async () => {
+      const { data } = await supabase
+        .from('matchmaking')
+        .select('status, game_id')
+        .eq('user_id', opponent.id)
+        .maybeSingle();
+
+      if (data && data.status === 'playing' && data.game_id) {
+        setOpponentConfirmed(true);
+        joinGameRoom(data.game_id);
+      }
+    };
+
+    const interval = setInterval(pollGameId, 1000);
+    return () => clearInterval(interval);
+  }, [matchState, user, opponent, isRoomCreator, joinedGameId]);
 
   // ========== 好友对战 ==========
   const handleFriendChallenge = async (friendId: string) => {
@@ -822,27 +1045,41 @@ export default function HumanGame() {
 
           <div className="flex items-center justify-center gap-6 mb-8">
             <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-2xl shadow-lg mx-auto mb-2">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-2xl shadow-lg mx-auto mb-2 relative">
                 🦊
+                {myConfirmed && (
+                  <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                    <Check className="w-4 h-4 text-white" />
+                  </div>
+                )}
               </div>
               <p className="font-medium text-sm">{profile?.nickname || '你'}</p>
               <Badge className="bg-gradient-to-r from-blue-500 to-purple-500 text-white border-0 text-xs mt-1">
                 {myRankInfo.icon} {myRankInfo.label}
               </Badge>
-              <p className="text-xs text-muted-foreground mt-1">{currentColor === 'black' ? '⚫ 黑棋' : '⚪ 白棋'}</p>
+              {isRoomCreator && (
+                <p className="text-xs text-amber-600 mt-1">房主</p>
+              )}
             </div>
 
             <div className="text-2xl font-bold text-primary">VS</div>
 
             <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center text-2xl shadow-lg mx-auto mb-2">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center text-2xl shadow-lg mx-auto mb-2 relative">
                 🐼
+                {opponentConfirmed && (
+                  <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                    <Check className="w-4 h-4 text-white" />
+                  </div>
+                )}
               </div>
               <p className="font-medium text-sm">{opponent.nickname || opponent.username}</p>
               <Badge className="bg-gradient-to-r from-blue-500 to-purple-500 text-white border-0 text-xs mt-1">
                 {opponentRankInfo.icon} {opponentRankInfo.label}
               </Badge>
-              <p className="text-xs text-muted-foreground mt-1">{currentColor === 'black' ? '⚪ 白棋' : '⚫ 黑棋'}</p>
+              {!isRoomCreator && (
+                <p className="text-xs text-muted-foreground mt-1">等待房主...</p>
+              )}
             </div>
           </div>
 
@@ -859,10 +1096,37 @@ export default function HumanGame() {
             )}
           </div>
 
-          <Button onClick={handleStartGame} className="w-full py-5 text-lg bg-gradient-to-r from-emerald-500 to-teal-600">
-            <Swords className="mr-2 h-5 w-5" /> 开始对弈
-          </Button>
-          <Button variant="ghost" onClick={() => setMatchState('idle')} className="w-full mt-2">
+          {/* 等待状态提示 */}
+          {myConfirmed && (
+            <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+              <p className="text-amber-700 text-sm">
+                {isRoomCreator ? '正在创建房间...' : '等待房主创建房间...'}
+              </p>
+            </div>
+          )}
+
+          {!myConfirmed ? (
+            <Button onClick={handleConfirmStart} className="w-full py-5 text-lg bg-gradient-to-r from-emerald-500 to-teal-600">
+              <Swords className="mr-2 h-5 w-5" /> {isRoomCreator ? '创建房间' : '加入游戏'}
+            </Button>
+          ) : (
+            <Button disabled className="w-full py-5 text-lg bg-gray-400">
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {isRoomCreator ? '创建中...' : '等待中...'}
+            </Button>
+          )}
+          <Button variant="ghost" onClick={async () => {
+            // 取消确认
+            if (user) {
+              await supabase
+                .from('matchmaking')
+                .update({ status: 'matched', black_player_id: null, game_id: null })
+                .eq('user_id', user.id);
+            }
+            setMyConfirmed(false);
+            setOpponentConfirmed(false);
+            setIsRoomCreator(false);
+            setJoinedGameId(null);
+          }} className="w-full mt-2">
             取消
           </Button>
         </div>
