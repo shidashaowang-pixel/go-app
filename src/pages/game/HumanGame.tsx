@@ -11,7 +11,6 @@ import { createGame, updateGame, getFriends, upsertDailyStat } from '@/db/api';
 import { awardGameAchievements } from '@/db/achievements';
 import { useAuth } from '@/contexts/AuthContext';
 import { GoEngine, type StoneColor, type GoGameResult, type PositionEstimate, type TerritoryEstimate } from '@/lib/go-engine';
-import { getAIMove, type AIDifficulty } from '@/lib/ai-engine';
 import type { GameMove, GameEndType, ScoreDetail } from '@/types/types';
 import {
   ArrowLeft, Users, Shuffle, Timer, Loader2, Swords,
@@ -389,37 +388,7 @@ export default function HumanGame() {
         });
     }
 
-    // 如果对手未通过 Realtime 落子，使用 AI 替代（开发/测试模式）
-    if (!eng.gameOver) {
-      setIsOpponentThinking(true);
-      const opponentColor: StoneColor = currentColor === 'black' ? 'white' : 'black';
-
-      // 3秒内如果 Realtime 没有推送对手落子，则用 AI 替代
-      setTimeout(async () => {
-        const currentEng = engineRef.current;
-        if (!currentEng || currentEng.gameOver) {
-          setIsOpponentThinking(false);
-          return;
-        }
-
-        // 检查是否对手还没落子（当前仍然是自己的回合之后的颜色）
-        if (currentEng.currentPlayer === opponentColor) {
-          // Realtime 没来，用启发式AI替代
-          const aiMove = await getAIMove(currentEng, 'intermediate', opponentColor);
-          if (aiMove && currentEng.isValidMove(aiMove[0], aiMove[1], opponentColor)) {
-            currentEng.placeStone(aiMove[0], aiMove[1]);
-            setEngine(Object.assign(Object.create(Object.getPrototypeOf(currentEng)), currentEng));
-          } else {
-            currentEng.pass();
-            if (currentEng.consecutivePasses >= 2) {
-              handleGameEnd(currentEng);
-            }
-            setEngine(Object.assign(Object.create(Object.getPrototypeOf(currentEng)), currentEng));
-          }
-        }
-        setIsOpponentThinking(false);
-      }, 3000);
-    }
+    // 等待对手通过 Realtime 落子，不再使用 AI 替代
   }, [gameId, currentColor]);
 
   const handleGameEnd = (eng: GoEngine, winnerOverride?: StoneColor, endType: GameEndType = 'score') => {
