@@ -38,6 +38,10 @@ jobs:
           
           # Copy index.html to 404.html for SPA routing
           cp dist/index.html dist/404.html
+          
+          # Fix asset paths in index.html and 404.html for relative paths
+          sed -i 's|href="/|href="./|g' dist/index.html dist/404.html
+          sed -i 's|src="/|src="./|g' dist/index.html dist/404.html
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
