@@ -150,7 +150,7 @@ export async function createOrJoinGame(
   }
 
   console.log('[匹配] 降级为前端直接创建游戏');
-  const userIsBlack = userId < opponentId; // 确定性颜色分配
+  const userIsBlack = userId.localeCompare(opponentId) < 0; // 确定性颜色分配（文本比较）
 
   const { data: game, error: gameError } = await supabase
     .from('games')

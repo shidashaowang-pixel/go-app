@@ -1,4 +1,5 @@
--- 改进版：使用 advisory lock 防止并发创建游戏
+-- 改进版 v3：使用 advisory lock 防止并发创建游戏
+-- 修复 UUID 比较问题，改为文本比较
 -- 双方都可以调用此函数，数据库保证只有一个游戏被创建
 
 CREATE OR REPLACE FUNCTION create_game_atomic(
@@ -15,16 +16,17 @@ DECLARE
   v_user_is_black BOOLEAN;
   v_komi_value NUMERIC;
   v_existing_game_id UUID;
-  v_lock_acquired BOOLEAN;
-  -- 使用两个 user id 中较小的那个作为 lock key，确保双方获得同一个锁
   v_lock_key BIGINT;
+  v_min_id TEXT;
+  v_max_id TEXT;
 BEGIN
-  -- 计算锁 key：取两个 UUID 的最小值的哈希
+  -- 使用两个 user id 的文本形式来计算锁 key
   -- 确保无论谁先调用，都获得同一个锁
-  SELECT hashtext(LEAST(p_user_id::text, p_opponent_id::text) || GREATEST(p_user_id::text, p_opponent_id::text))
-  INTO v_lock_key;
+  v_min_id := LEAST(p_user_id::text, p_opponent_id::text);
+  v_max_id := GREATEST(p_user_id::text, p_opponent_id::text);
+  SELECT hashtext(v_min_id || v_max_id) INTO v_lock_key;
 
-  -- 尝试获取 advisory lock（非阻塞）
+  -- 获取 advisory lock（事务级别，事务结束自动释放）
   PERFORM pg_advisory_xact_lock(v_lock_key);
   
   -- 1. 先检查自己是否已经有 game_id
@@ -37,7 +39,7 @@ BEGIN
     -- 已经有游戏了，验证游戏存在后直接返回
     RETURN QUERY 
     SELECT v_existing_game_id, 
-           CASE WHEN g.black_player_id = p_user_id THEN 'black' ELSE 'white' END
+           CASE WHEN g.black_player_id = p_user_id THEN 'black'::TEXT ELSE 'white'::TEXT END
     FROM games g WHERE g.id = v_existing_game_id;
     RETURN;
   END IF;
@@ -56,14 +58,14 @@ BEGIN
     
     RETURN QUERY 
     SELECT v_existing_game_id,
-           CASE WHEN g.black_player_id = p_user_id THEN 'black' ELSE 'white' END
+           CASE WHEN g.black_player_id = p_user_id THEN 'black'::TEXT ELSE 'white'::TEXT END
     FROM games g WHERE g.id = v_existing_game_id;
     RETURN;
   END IF;
 
   -- 3. 双方都没有游戏，创建新游戏
-  -- 使用确定性的颜色分配：基于两个 UUID 的大小比较，确保双方结果一致
-  v_user_is_black := p_user_id < p_opponent_id;
+  -- 使用文本比较来确定颜色（避免 UUID 类型的比较问题）
+  v_user_is_black := p_user_id::text < p_opponent_id::text;
   
   v_komi_value := CASE 
     WHEN p_handicap_mode = 'even' THEN 
@@ -107,6 +109,11 @@ BEGIN
     NULL
   )
   RETURNING id INTO v_game_id;
+  
+  -- 验证游戏确实创建成功且玩家 ID 正确
+  IF v_game_id IS NULL THEN
+    RAISE EXCEPTION 'Failed to create game';
+  END IF;
   
   -- 更新双方的 matchmaking 记录
   UPDATE matchmaking 
