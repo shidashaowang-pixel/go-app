@@ -15,7 +15,7 @@ import type { GameMove, GameEndType, ScoreDetail } from '@/types/types';
 import {
   ArrowLeft, Users, Shuffle, Timer, Loader2,
   Flag, Circle, TrendingUp, AlertCircle,
-  FlaskConical, ChevronLeft, X, RotateCcw, Swords
+  FlaskConical, ChevronLeft, X, RotateCcw, Swords, Calculator
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { tryCreateGame, waitForGame, checkForPendingGame } from '@/lib/matchmaking-v3';
@@ -67,6 +67,7 @@ export default function HumanGame() {
   const [handicapCount, setHandicapCount] = useState(2);
   const [handicapDirection, setHandicapDirection] = useState<'user-gives' | 'ai-gives'>('user-gives');
   const [showConfetti, setShowConfetti] = useState(false);
+  const [countStoneOpen, setCountStoneOpen] = useState(false);
 
   const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -614,6 +615,19 @@ export default function HumanGame() {
 
         if (move.user_id === user?.id) return;
 
+        // 对手虚手（pass）
+        if (move.row === -1 && move.col === -1) {
+          eng.pass();
+          setEngine(Object.assign(Object.create(Object.getPrototypeOf(eng)), eng));
+          setCurrentColor(eng.currentPlayer);
+          setIsOpponentThinking(false);
+          toast.info('对手选择了虚手');
+          if (eng.consecutivePasses >= 2) {
+            handleGameEnd(eng);
+          }
+          return;
+        }
+
         if (eng.isValidMove(move.row, move.col)) {
           eng.placeStone(move.row, move.col);
           setEngine(Object.assign(Object.create(Object.getPrototypeOf(eng)), eng));
@@ -715,14 +729,61 @@ export default function HumanGame() {
     }
   };
 
-  const handlePass = () => {
+  const handlePass = async () => {
     if (!engine || engine.gameOver) return;
     engine.pass();
     setEngine(Object.assign(Object.create(Object.getPrototypeOf(engine)), engine));
+    setCurrentColor(engine.currentPlayer);
     toast.info('你选择了虚手');
+    setIsOpponentThinking(true);
+
+    // 同步 pass 到对手
+    if (gameId) {
+      await supabase.from('game_moves').insert({
+        game_id: gameId,
+        move_number: engine.getMoveCount(),
+        row: -1,
+        col: -1,
+        player: currentColor,
+        user_id: user?.id,
+        created_at: new Date().toISOString(),
+      });
+    }
+
     if (engine.consecutivePasses >= 2) {
       handleGameEnd(engine);
     }
+  };
+
+  /** 申请数子 */
+  const handleRequestCount = async () => {
+    if (!engine || engine.gameOver) return;
+    // 玩家先 pass
+    engine.pass();
+    setEngine(Object.assign(Object.create(Object.getPrototypeOf(engine)), engine));
+    setCurrentColor(engine.currentPlayer);
+    toast.info('已申请数子，等待对手回应...');
+    setIsOpponentThinking(true);
+
+    // 同步 pass 到对手
+    if (gameId) {
+      await supabase.from('game_moves').insert({
+        game_id: gameId,
+        move_number: engine.getMoveCount(),
+        row: -1,
+        col: -1,
+        player: currentColor,
+        user_id: user?.id,
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    // 如果对手之前已经 pass 过，双方连续虚手直接终局
+    if (engine.consecutivePasses >= 2) {
+      handleGameEnd(engine);
+      setCountStoneOpen(true);
+    }
+    // 否则等待对手也 pass（通过 subscribeToOpponentMoves 监听）
   };
 
   const handleResign = () => {
@@ -1138,8 +1199,13 @@ export default function HumanGame() {
                 </div>
               ) : (
                 <div className="mt-3 space-y-2">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <Button variant="outline" size="sm" onClick={handlePass}>虚手</Button>
+                    <Button variant="outline" size="sm" onClick={handleRequestCount}
+                            disabled={isOpponentThinking}
+                            className="flex items-center justify-center gap-0.5">
+                      <Calculator className="w-3 h-3" /> 数子
+                    </Button>
                     <Button variant="outline" size="sm" onClick={handleResign} className="text-destructive">
                       <Flag className="mr-1 h-3 w-3" /> 认输
                     </Button>
@@ -1162,9 +1228,29 @@ export default function HumanGame() {
                 <p className="text-sm text-muted-foreground mt-1">
                   {gameResult?.winner === currentColor ? '太厉害了！你是围棋小英雄！' : '没关系，继续加油！'}
                 </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {gameResult ? `黑 ${gameResult.blackScore.toFixed(1)} 目 vs 白 ${gameResult.whiteScore.toFixed(1)} 目` : ''}
-                </p>
+
+                {/* 数子得分详情 */}
+                {gameResult && (
+                  <div className="mt-3 p-3 bg-secondary/50 rounded-lg text-left space-y-2">
+                    <div className="flex justify-between text-sm font-medium">
+                      <span>⚫ 黑方</span>
+                      <span className="font-bold">{gameResult.blackScore.toFixed(1)} 目</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-medium">
+                      <span>⚪ 白方</span>
+                      <span className="font-bold">{gameResult.whiteScore.toFixed(1)} 目</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground border-t pt-1">
+                      <span>贴目</span>
+                      <span>{gameResult.komi} 目</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-0.5 border-t pt-1">
+                      <p>⚫ 黑子 {gameResult.details.blackStones} + 黑地 {gameResult.details.blackTerritory} = {gameResult.blackScore.toFixed(1)}</p>
+                      <p>⚪ 白子 {gameResult.details.whiteStones} + 白地 {gameResult.details.whiteTerritory} + 贴目 {gameResult.details.whiteKomi} = {gameResult.whiteScore.toFixed(1)}</p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex gap-3 mt-3">
                   <Button onClick={() => { stopSpeak(); setMatchState('idle'); setEngine(null); setGameResult(null); cleanup(); }} className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600">
                     🎮 返回大厅
