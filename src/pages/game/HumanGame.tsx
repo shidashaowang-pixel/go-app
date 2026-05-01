@@ -334,12 +334,13 @@ export default function HumanGame() {
       return;
     }
 
-    setOpponent({
+    const oppData: OnlinePlayer = {
       id: data.id,
       nickname: data.nickname,
       username: data.username,
       rating: data.rating,
-    });
+    };
+    setOpponent(oppData);
 
     // 获取我的记录，确定谁应该是创建者
     const { data: myRecord } = await supabase
@@ -366,7 +367,7 @@ export default function HumanGame() {
         setGameId(myRecord.game_id);
         setCurrentColor(myColor);
         setMatchState('playing');
-        joinGameRoom(myRecord.game_id);
+        joinGameRoom(myRecord.game_id, oppData);
         return;
       }
     }
@@ -391,16 +392,15 @@ export default function HumanGame() {
         setGameId(result.gameId);
         setCurrentColor(result.myColor);
         setMatchState('playing');
-        joinGameRoom(result.gameId);
+        joinGameRoom(result.gameId, oppData);
       } else {
         // 创建失败，可能是对手已经创建了，再检查一次
-        await new Promise(r => setTimeout(r, 500));
         const retry = await checkForPendingGame(user!.id);
         if (retry) {
           setGameId(retry.gameId);
           setCurrentColor(retry.myColor);
           setMatchState('playing');
-          joinGameRoom(retry.gameId);
+          joinGameRoom(retry.gameId, oppData);
         } else {
           toast.error('创建游戏失败，请重试');
           setMatchState('idle');
@@ -414,7 +414,7 @@ export default function HumanGame() {
         setGameId(waitResult.gameId);
         setCurrentColor(waitResult.myColor);
         setMatchState('playing');
-        joinGameRoom(waitResult.gameId);
+        joinGameRoom(waitResult.gameId, oppData);
       } else if (waitResult.type === 'cancelled') {
         toast.info('匹配已取消');
         setMatchState('idle');
@@ -487,12 +487,13 @@ export default function HumanGame() {
       
       if (result.success && result.gameId) {
         // 设置对手信息
-        setOpponent({
+        const oppData2: OnlinePlayer = {
           id: inviter.id,
           nickname: inviter.nickname,
           username: inviter.username,
           rating: inviter.rating,
-        });
+        };
+        setOpponent(oppData2);
         
         // 获取我是什么颜色
         const { data: game } = await supabase
@@ -506,7 +507,7 @@ export default function HumanGame() {
         setGameId(result.gameId);
         setCurrentColor(myColor);
         setMatchState('playing');
-        joinGameRoom(result.gameId);
+        joinGameRoom(result.gameId, oppData2);
       } else {
         toast.error('接受邀请失败');
       }
@@ -543,8 +544,9 @@ export default function HumanGame() {
     };
   }, [user, matchState]);
 
-  const joinGameRoom = async (gId: string) => {
-    if (!user || !opponent) return;
+  const joinGameRoom = async (gId: string, opponentOverride?: OnlinePlayer) => {
+    const opp = opponentOverride || opponent;
+    if (!user || !opp) return;
 
     setGameId(gId);
 
