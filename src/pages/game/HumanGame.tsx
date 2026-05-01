@@ -18,7 +18,7 @@ import {
   FlaskConical, ChevronLeft, X, RotateCcw, Swords
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { tryCreateGame, waitForGame } from '@/lib/matchmaking-v3';
+import { tryCreateGame, waitForGame, checkForPendingGame } from '@/lib/matchmaking-v3';
 import { 
   createFriendInvitation, 
   getReceivedInvitations, 
@@ -185,6 +185,13 @@ export default function HumanGame() {
   const handleRandomMatch = async () => {
     if (!user) return;
 
+    // 彻底清理旧状态
+    cleanup();
+    setEngine(null);
+    setGameId(null);
+    setGameResult(null);
+    setOpponent(null);
+
     // 清理旧的匹配记录
     await supabase.from('matchmaking').delete().eq('user_id', user.id);
 
@@ -206,8 +213,32 @@ export default function HumanGame() {
         .limit(1);
 
       if (existing && existing.length > 0) {
-        // 找到等待中的对手，直接匹配
+        // 找到等待中的对手
         const opponentId = existing[0].user_id;
+
+        // 使用 upsert 确保自己的记录存在（避免触发器或并发问题）
+        await supabase
+          .from('matchmaking')
+          .upsert({
+            user_id: user.id,
+            board_size: boardSize,
+            time_control: timeKey,
+            status: 'matched',
+            matched_with: opponentId,
+            rating: profile?.rating ?? 0,
+            created_at: new Date().toISOString(),
+          });
+
+        // 更新对手的记录
+        await supabase
+          .from('matchmaking')
+          .update({
+            status: 'matched',
+            matched_with: user.id,
+          })
+          .eq('user_id', opponentId);
+
+        // 统一通过 handleMatchFound 处理后续逻辑（双方都会走这里）
         await handleMatchFound(opponentId);
         return;
       }
@@ -276,13 +307,18 @@ export default function HumanGame() {
   };
 
   const handleMatchFound = async (opponentId: string) => {
-    // 清理搜索计时器
+    // 幂等性保护：如果已经在游戏中或已结束，不再处理
+    if (matchState === 'playing' || matchState === 'finished') return;
+
+    // 清理搜索计时器和旧监听
     if (searchTimerRef.current) clearInterval(searchTimerRef.current);
     if (matchPollRef.current) clearInterval(matchPollRef.current);
-    if (subscriptionRef.current) supabase.removeChannel(subscriptionRef.current);
+    if (subscriptionRef.current) {
+      supabase.removeChannel(subscriptionRef.current);
+      subscriptionRef.current = null;
+    }
     searchTimerRef.current = null;
     matchPollRef.current = null;
-    subscriptionRef.current = null;
 
     // 获取对手信息
     const { data } = await supabase
@@ -303,25 +339,74 @@ export default function HumanGame() {
       username: data.username,
       rating: data.rating,
     });
+
+    // 获取我的记录，确定谁应该是创建者
+    const { data: myRecord } = await supabase
+      .from('matchmaking')
+      .select('created_at, game_id')
+      .eq('user_id', user!.id)
+      .maybeSingle();
+
+    const { data: opponentRecord } = await supabase
+      .from('matchmaking')
+      .select('created_at, game_id')
+      .eq('user_id', opponentId)
+      .maybeSingle();
+
+    // 如果已经有 game_id（比如对手已创建），直接进入游戏
+    if (myRecord?.game_id) {
+      const { data: game } = await supabase
+        .from('games')
+        .select('black_player_id')
+        .eq('id', myRecord.game_id)
+        .maybeSingle();
+      if (game) {
+        const myColor = game.black_player_id === user!.id ? 'black' : 'white';
+        setGameId(myRecord.game_id);
+        setCurrentColor(myColor);
+        setMatchState('playing');
+        joinGameRoom(myRecord.game_id);
+        return;
+      }
+    }
+
+    // created_at 更早的是创建者
+    const myTime = myRecord?.created_at ? new Date(myRecord.created_at).getTime() : 0;
+    const oppTime = opponentRecord?.created_at ? new Date(opponentRecord.created_at).getTime() : Date.now();
+    const isCreator = myTime <= oppTime;
+
     setMatchState('matched');
 
-    // 尝试创建游戏（根据 created_at 判断谁是创建者）
-    const result = await tryCreateGame(
-      user!.id,
-      boardSize,
-      timeKey,
-      handicapMode,
-      handicapCount
-    );
+    if (isCreator) {
+      const result = await tryCreateGame(
+        user!.id,
+        boardSize,
+        timeKey,
+        handicapMode,
+        handicapCount
+      );
 
-    if (result) {
-      // 我是创建者，游戏创建成功
-      setGameId(result.gameId);
-      setCurrentColor(result.myColor);
-      setMatchState('playing');
-      joinGameRoom(result.gameId);
+      if (result) {
+        setGameId(result.gameId);
+        setCurrentColor(result.myColor);
+        setMatchState('playing');
+        joinGameRoom(result.gameId);
+      } else {
+        // 创建失败，可能是对手已经创建了，再检查一次
+        await new Promise(r => setTimeout(r, 500));
+        const retry = await checkForPendingGame(user!.id);
+        if (retry) {
+          setGameId(retry.gameId);
+          setCurrentColor(retry.myColor);
+          setMatchState('playing');
+          joinGameRoom(retry.gameId);
+        } else {
+          toast.error('创建游戏失败，请重试');
+          setMatchState('idle');
+        }
+      }
     } else {
-      // 我不是创建者，等待对方创建
+      // 非创建者，等待对方创建
       const waitResult = await waitForGame(user!.id, 60000);
 
       if (waitResult.type === 'game_created') {
@@ -329,6 +414,9 @@ export default function HumanGame() {
         setCurrentColor(waitResult.myColor);
         setMatchState('playing');
         joinGameRoom(waitResult.gameId);
+      } else if (waitResult.type === 'cancelled') {
+        toast.info('匹配已取消');
+        setMatchState('idle');
       } else {
         toast.error('等待匹配超时，请重试');
         setMatchState('idle');
