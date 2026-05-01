@@ -342,17 +342,11 @@ export default function HumanGame() {
     };
     setOpponent(oppData);
 
-    // 获取我的记录，确定谁应该是创建者
+    // 获取我的记录，检查是否已有游戏
     const { data: myRecord } = await supabase
       .from('matchmaking')
       .select('created_at, game_id')
       .eq('user_id', user!.id)
-      .maybeSingle();
-
-    const { data: opponentRecord } = await supabase
-      .from('matchmaking')
-      .select('created_at, game_id')
-      .eq('user_id', opponentId)
       .maybeSingle();
 
     // 如果已经有 game_id（比如对手已创建），直接进入游戏
@@ -372,42 +366,26 @@ export default function HumanGame() {
       }
     }
 
-    // created_at 更早的是创建者
-    const myTime = myRecord?.created_at ? new Date(myRecord.created_at).getTime() : 0;
-    const oppTime = opponentRecord?.created_at ? new Date(opponentRecord.created_at).getTime() : Date.now();
-    const isCreator = myTime <= oppTime;
-
+    // 统一由 tryCreateGame 判断创建者，避免前后端判断不一致
     setMatchState('matched');
 
-    if (isCreator) {
-      const result = await tryCreateGame(
-        user!.id,
-        boardSize,
-        timeKey,
-        handicapMode,
-        handicapCount
-      );
+    // 先尝试创建游戏（内部会判断是否是创建者）
+    const result = await tryCreateGame(
+      user!.id,
+      boardSize,
+      timeKey,
+      handicapMode,
+      handicapCount
+    );
 
-      if (result) {
-        setGameId(result.gameId);
-        setCurrentColor(result.myColor);
-        setMatchState('playing');
-        joinGameRoom(result.gameId, oppData);
-      } else {
-        // 创建失败，可能是对手已经创建了，再检查一次
-        const retry = await checkForPendingGame(user!.id);
-        if (retry) {
-          setGameId(retry.gameId);
-          setCurrentColor(retry.myColor);
-          setMatchState('playing');
-          joinGameRoom(retry.gameId, oppData);
-        } else {
-          toast.error('创建游戏失败，请重试');
-          setMatchState('idle');
-        }
-      }
+    if (result) {
+      // 我是创建者，游戏已创建
+      setGameId(result.gameId);
+      setCurrentColor(result.myColor);
+      setMatchState('playing');
+      joinGameRoom(result.gameId, oppData);
     } else {
-      // 非创建者，等待对方创建
+      // 我不是创建者，等待对方创建
       const waitResult = await waitForGame(user!.id, 60000);
 
       if (waitResult.type === 'game_created') {
