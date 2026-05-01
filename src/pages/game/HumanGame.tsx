@@ -18,7 +18,7 @@ import {
   FlaskConical, ChevronLeft, X, RotateCcw, Swords, Calculator
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { tryCreateGame, waitForGame, checkForPendingGame } from '@/lib/matchmaking-v3';
+import { createOrJoinGame, waitForGame, checkForPendingGame } from '@/lib/matchmaking-v3';
 import { 
   createFriendInvitation, 
   getReceivedInvitations, 
@@ -366,11 +366,11 @@ export default function HumanGame() {
       }
     }
 
-    // 统一由 tryCreateGame 判断创建者，避免前后端判断不一致
+    // 双方都调用 createOrJoinGame，由数据库保证只创建一个游戏
     setMatchState('matched');
 
-    // 先尝试创建游戏（内部会判断是否是创建者）
-    const result = await tryCreateGame(
+    // 先尝试 RPC 创建/加入游戏
+    const result = await createOrJoinGame(
       user!.id,
       boardSize,
       timeKey,
@@ -379,13 +379,13 @@ export default function HumanGame() {
     );
 
     if (result) {
-      // 我是创建者，游戏已创建
+      // 成功创建或加入游戏
       setGameId(result.gameId);
       setCurrentColor(result.myColor);
       setMatchState('playing');
       joinGameRoom(result.gameId, oppData);
     } else {
-      // 我不是创建者，等待对方创建
+      // RPC 不可用或降级失败，轮询等待游戏
       const waitResult = await waitForGame(user!.id, 60000);
 
       if (waitResult.type === 'game_created') {
