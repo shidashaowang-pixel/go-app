@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layouts/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ interface ChildInfo {
 }
 
 export default function ParentDashboard() {
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [children, setChildren] = useState<ChildInfo[]>([]);
   const [selectedChild, setSelectedChild] = useState<ChildInfo | null>(null);
@@ -344,7 +346,7 @@ export default function ParentDashboard() {
                     <p className="text-muted-foreground mb-4">
                       为{child.nickname || child.username}制定科学的学习计划，根据数据分析提供个性化建议
                     </p>
-                    <Button onClick={() => window.open('/parent/plan', '_blank')} className="gap-2">
+                    <Button onClick={() => navigate('/parent/plan')} className="gap-2">
                       查看详细学习计划
                     </Button>
                   </div>
