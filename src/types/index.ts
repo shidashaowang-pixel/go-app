@@ -105,8 +105,16 @@ export interface BoardPosition {
   white: number[][];
 }
 
-/** 判定方式：精确匹配坐标 vs 提子判定 vs 做活判定 */
-export type WinCondition = 'exact_move' | 'capture' | 'make_eyes' | 'kill_opponent';
+/** 判定方式：精确匹配坐标 vs 提子判定 vs 做活判定 vs AI对弈模式 */
+export type WinCondition = 'exact_move' | 'capture' | 'make_eyes' | 'kill_opponent' | 'ai_battle';
+
+/** 单步落子记录（包含颜色信息，用于AI对弈模式） */
+export interface SolutionMove {
+  row: number;
+  col: number;
+  /** 落子方：'black' | 'white'。如果不传，则按先手方交替推导 */
+  color?: 'black' | 'white';
+}
 
 export interface Solution {
   moves: number[][];
@@ -119,18 +127,27 @@ export interface Solution {
    * - 'capture'：只要吃到对方棋子就算赢（像101围棋那样）
    * - 'make_eyes'：需要做出眼位活棋
    * - 'kill_opponent'：需要杀死对方的棋
+   * - 'ai_battle'：AI自动应对模式，用户和AI按正解图/错误图交替落子
    */
   win_condition?: WinCondition;
   /** capture 模式下，需要提掉的白子最少数量（默认1） */
   capture_min?: number;
   /** make_eyes 模式下，需要做成的最少眼数（默认2） */
   eye_min?: number;
+  /** 先手方：'black' | 'white'，用于AI对弈模式判断谁先走 */
+  to_play?: 'black' | 'white';
+  /** AI对弈模式：完整的交替落子序列（包含用户和AI的走法），用于多步正解 */
+  ai_moves?: SolutionMove[];
+  /** AI对弈模式：替代正解分支的完整交替落子序列 */
+  alternative_ai_moves?: SolutionMove[][];
 }
 
 /** 错误解/误答：常见但错误的落子 */
 export interface WrongAnswer {
   moves: number[][];
   explanation: string;
+  /** AI对弈模式：错误分支的完整交替落子序列 */
+  ai_moves?: SolutionMove[];
 }
 
 export type GameType = 'ai' | 'human';

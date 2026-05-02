@@ -47,6 +47,11 @@ export default function ProblemSolve() {
       return new Set();
     }
   });
+  // AI对弈模式状态
+  const [aiBattleStep, setAiBattleStep] = useState(0); // 当前进行到正解序列的第几步
+  const [aiWrongFeedback, setAiWrongFeedback] = useState(''); // AI对弈模式的错误反馈
+  const [aiThinking, setAiThinking] = useState(false); // AI是否正在思考（防止用户重复点击）
+  const [aiWrongBranchActive, setAiWrongBranchActive] = useState(false); // 是否处于错误分支继续状态
 
   // 初始化引擎
   useEffect(() => {
@@ -71,8 +76,140 @@ export default function ProblemSolve() {
 
   const initEngine = (p: TsumegoProblem) => {
     const e = new GoEngine(p.boardSize);
-    e.loadPosition(p.initialPosition);
+    e.loadPosition(p.initialPosition, (p.solution as any)?.to_play || 'black');
     setEngine(e);
+    setAiBattleStep(0);
+    setAiWrongFeedback('');
+    setAiThinking(false);
+    setAiWrongBranchActive(false);
+  };
+
+  // AI对弈模式：检查用户落子是否匹配某个分支
+  // 返回说明：
+  //   - correct: true=正解, false=错误
+  //   - done: true=结束（正解完成或完全不在分支中）, false=继续（AI还要走或错误分支继续）
+  //   - feedback: 提示信息
+  //   - isWrongBranch: 是否匹配到了错误分支（需要显示失败提示但继续走）
+  const checkAIBattleMove = (row: number, col: number, eng: GoEngine): { correct: boolean; done: boolean; feedback?: string; isWrongBranch?: boolean } => {
+    if (!problem) return { correct: false, done: false };
+
+    const aiMoves = (problem.solution as any)?.ai_moves as Array<{ row: number; col: number; color?: string }> | undefined;
+    const altAiMoves = (problem.solution as any)?.alternative_ai_moves as Array<Array<{ row: number; col: number; color?: string }>> | undefined;
+    const wrongAiMoves = problem.wrong_answers?.map(wa => (wa as any).ai_moves as Array<{ row: number; col: number; color?: string }> | undefined);
+    const toPlay = (problem.solution as any)?.to_play as 'black' | 'white' || 'black';
+
+    const userColor = toPlay;
+    // 计算这是用户的第几步（只算用户颜色的步数）
+    const history = eng.getMoveHistory();
+    const userMoveCount = history.filter(m => m.color === userColor).length;
+
+    console.log('[AI对弈] 用户落子:', { row, col, userMoveCount, totalMoves: history.length });
+
+    // 辅助函数：创建新引擎实例来触发React重渲染
+    const cloneEngineForRender = (sourceEng: GoEngine): GoEngine => {
+      const newEng = new GoEngine(sourceEng.size);
+      // 复制棋盘状态
+      newEng.board = sourceEng.board.map(r => [...r]);
+      newEng.currentPlayer = sourceEng.currentPlayer;
+      newEng.moveHistory = sourceEng.moveHistory.map(m => ({ ...m, captured: m.captured.map(r => [...r]) }));
+      newEng.capturedStones = { ...sourceEng.capturedStones };
+      newEng.koPoint = sourceEng.koPoint ? { ...sourceEng.koPoint } : null;
+      newEng.consecutivePasses = sourceEng.consecutivePasses;
+      newEng.gameOver = sourceEng.gameOver;
+      newEng.lastBoardState = sourceEng.lastBoardState;
+      return newEng;
+    };
+
+    // 检查是否匹配任何错误分支
+    if (wrongAiMoves) {
+      for (let wi = 0; wi < wrongAiMoves.length; wi++) {
+        const wa = wrongAiMoves[wi];
+        if (!wa || wa.length === 0) continue;
+        // 检查用户当前步是否匹配错误分支的对应步
+        // wa[0]=用户第1步, wa[1]=AI第1步, wa[2]=用户第2步, ...
+        const expectedUserStepIdx = (userMoveCount - 1) * 2;
+        if (expectedUserStepIdx < wa.length) {
+          const expected = wa[expectedUserStepIdx];
+          if (expected && expected.row === row && expected.col === col) {
+            // 用户走到了错误分支！
+            // AI需要继续按错误分支走下一步（如果有）
+            const aiResponse = wa[expectedUserStepIdx + 1]; // AI在错误分支中的应手
+            const hasMoreUserMoves = expectedUserStepIdx + 2 < wa.length; // 错误分支后面还有用户的步吗
+
+            if (aiResponse) {
+              setAiThinking(true);
+              setTimeout(() => {
+                eng.placeStone(aiResponse.row, aiResponse.col);
+                setEngine(cloneEngineForRender(eng));
+                setAiThinking(false);
+              }, 600);
+            }
+            const wrongExp = problem.wrong_answers?.[wi]?.explanation || '这个走法不正确';
+            // 错误分支：显示失败提示，但继续走（如果还有后续步）
+            return { correct: false, done: !hasMoreUserMoves, feedback: wrongExp, isWrongBranch: true };
+          }
+        }
+      }
+    }
+
+    // 检查是否匹配主正解分支
+    if (aiMoves && aiMoves.length > 0) {
+      const expectedUserStepIdx = (userMoveCount - 1) * 2;
+      if (expectedUserStepIdx < aiMoves.length) {
+        const expected = aiMoves[expectedUserStepIdx];
+        if (expected && expected.row === row && expected.col === col) {
+          // 匹配正解！检查是否还有AI应手
+          const aiResponse = aiMoves[expectedUserStepIdx + 1];
+          const isLastUserMove = expectedUserStepIdx + 2 >= aiMoves.length; // 后面没有用户的步了
+
+          if (aiResponse) {
+            // AI自动落子
+            setAiThinking(true);
+            setTimeout(() => {
+              eng.placeStone(aiResponse.row, aiResponse.col);
+              setEngine(cloneEngineForRender(eng));
+              setAiBattleStep(userMoveCount);
+              setAiThinking(false);
+            }, 600);
+            return { correct: true, done: false }; // AI走完后继续让用户走
+          }
+
+          // 没有AI应手，用户走完了正解序列的最后一步
+          return { correct: true, done: true };
+        }
+      }
+    }
+
+    // 检查是否匹配替代正解分支
+    if (altAiMoves) {
+      for (const alt of altAiMoves) {
+        if (!alt || alt.length === 0) continue;
+        const expectedUserStepIdx = (userMoveCount - 1) * 2;
+        if (expectedUserStepIdx < alt.length) {
+          const expected = alt[expectedUserStepIdx];
+          if (expected && expected.row === row && expected.col === col) {
+            const aiResponse = alt[expectedUserStepIdx + 1];
+            const isLastUserMove = expectedUserStepIdx + 2 >= alt.length;
+
+            if (aiResponse) {
+              setAiThinking(true);
+              setTimeout(() => {
+                eng.placeStone(aiResponse.row, aiResponse.col);
+                setEngine(cloneEngineForRender(eng));
+                setAiBattleStep(userMoveCount);
+                setAiThinking(false);
+              }, 600);
+              return { correct: true, done: false };
+            }
+
+            return { correct: true, done: true };
+          }
+        }
+      }
+    }
+
+    // 不匹配任何分支 → 直接判错（真正结束）
+    return { correct: false, done: true, feedback: '这个走法不在正解或常见错误分支中', isWrongBranch: false };
   };
 
   // 处理落子
@@ -81,29 +218,60 @@ export default function ProblemSolve() {
 
     const wc = problem.solution.win_condition;
 
+    // AI对弈模式
+    if (wc === 'ai_battle') {
+      const result = checkAIBattleMove(row, col, eng);
+
+      if (result.isWrongBranch) {
+        // 匹配到错误分支：显示失败提示，但继续走（如果还有后续步）
+        if (result.feedback) {
+          setAiWrongFeedback(result.feedback);
+        }
+        // 播放错误音效和语音
+        const phrase = getWrongPhrase();
+        setResult('wrong');
+        setFeedbackPhrase(phrase);
+        playWrongSound();
+        speak(phrase);
+
+        if (!result.done) {
+          // 错误分支还有后续，让用户继续走（AI已经落子）
+          setAiWrongBranchActive(true);
+          // 3秒后自动清除错误状态，让用户继续
+          setTimeout(() => {
+            setResult(null);
+            setFeedbackPhrase('');
+            setAiWrongBranchActive(false);
+          }, 3000);
+        }
+        return;
+      }
+
+      if (result.done) {
+        if (result.correct) {
+          handleCorrect();
+        } else {
+          // 完全不在任何分支中
+          if (result.feedback) {
+            setAiWrongFeedback(result.feedback);
+          }
+          handleWrong();
+        }
+      }
+      // 如果 done=false（正解且AI还要走），等AI走完再让用户走
+      return;
+    }
+
     if (wc === 'capture') {
       // 提子判定：吃到子算赢
-      // 注意：eng 已经是落子后的状态，capturedStones.black 是累计值
-      // 提子类题目设计为一步提子，所以直接检查是否有提子
       const captureMin = problem.solution.capture_min || 1;
       const totalCaptured = eng.capturedStones.black;
       
-      // 检查答案坐标是否正确，以及是否提了足够的子
       const solution = problem.solution.moves;
       const lastMove = eng.getLastMove();
       const matchesSolution = lastMove && 
         lastMove.row === solution[0][0] && 
         lastMove.col === solution[0][1];
-
-      // 调试日志
-      console.log('[DEBUG] capture move:', {
-        problemId: problem.id,
-        lastMove,
-        solution: solution[0],
-        totalCaptured,
-        captureMin,
-        matchesSolution,
-      });
 
       if (matchesSolution && totalCaptured >= captureMin) {
         handleCorrect();
@@ -118,7 +286,6 @@ export default function ProblemSolve() {
     const alternatives = problem.solution.alternative_moves ?? [];
     const moveCount = eng.getMoveCount();
 
-    // 只检查第一步（简化：单步题目为主）
     if (moveCount >= 1) {
       const lastMove = eng.getLastMove();
       const matchesMain = lastMove && lastMove.row === solution[0][0] && lastMove.col === solution[0][1];
@@ -172,9 +339,13 @@ export default function ProblemSolve() {
     stopSpeak();
     setResult(null);
     setFeedbackPhrase('');
+    setAiWrongFeedback('');
     setShowSolution(false);
     setSolutionEngine(null);
     setSolutionStep(0);
+    setAiBattleStep(0);
+    setAiThinking(false);
+    setAiWrongBranchActive(false);
     if (problem) initEngine(problem);
   };
 
@@ -210,7 +381,7 @@ export default function ProblemSolve() {
 
     // 创建一个新引擎来演示正解
     const e = new GoEngine(problem.boardSize);
-    e.loadPosition(problem.initialPosition);
+    e.loadPosition(problem.initialPosition, (problem.solution as any)?.to_play || 'black');
     setSolutionEngine(e);
     setSolutionStep(0);
   };
@@ -273,7 +444,7 @@ export default function ProblemSolve() {
               size={problem.boardSize}
               engine={displayEngine}
               onMove={handleMove}
-              disabled={result !== null || showSolution}
+              disabled={(result !== null && !aiWrongBranchActive) || showSolution || aiThinking}
               highlightLastMove
             />
           </div>
@@ -336,6 +507,9 @@ export default function ProblemSolve() {
                       <span className="text-2xl bounce-in">💪</span>
                       <div>
                         <p className="font-bold">{feedbackPhrase}</p>
+                        {aiWrongFeedback && (
+                          <p className="text-xs mt-1 leading-relaxed">{aiWrongFeedback}</p>
+                        )}
                         <p className="text-xs mt-1">再仔细看看棋盘，试试别的位置~</p>
                       </div>
                     </div>
@@ -391,7 +565,7 @@ export default function ProblemSolve() {
                         <RotateCcw className="h-4 w-4" />
                       </Button>
                     </div>
-                  ) : result === 'wrong' ? (
+                  ) : result === 'wrong' && !aiWrongBranchActive ? (
                     <div className="flex gap-2">
                       <Button onClick={handleRetry} variant="outline" className="flex-1 h-10 text-sm font-bold rounded-xl border-2 border-orange-300 text-orange-600 hover:bg-orange-50">
                         <RotateCcw className="h-4 w-4 mr-1" /> 再试一次
@@ -399,6 +573,12 @@ export default function ProblemSolve() {
                       <Button variant="outline" size="sm" className="h-10 px-3 rounded-xl" onClick={handleShowSolution}>
                         <Eye className="h-4 w-4 mr-1" /> 正解
                       </Button>
+                    </div>
+                  ) : result === 'wrong' && aiWrongBranchActive ? (
+                    <div className="flex gap-2">
+                      <div className="flex-1 text-center text-sm text-orange-600 py-2 font-medium">
+                        ⚠️ 这是错误分支，AI已应对，请继续走棋...
+                      </div>
                     </div>
                   ) : showSolution ? (
                     <div className="flex gap-2">
@@ -410,16 +590,27 @@ export default function ProblemSolve() {
                       </Button>
                     </div>
                   ) : (
-                    <div className="flex gap-2">
-                      <div className="flex-1 text-center text-sm text-muted-foreground py-2">
-                        👆 在棋盘上点击落子作答
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <div className="flex-1 text-center text-sm text-muted-foreground py-2">
+                          {aiThinking
+                            ? '🤖 AI正在思考...'
+                            : problem.solution.win_condition === 'ai_battle'
+                            ? `🤖 AI对弈模式：你是${(problem.solution as any)?.to_play === 'white' ? '白棋' : '黑棋'}，请落子`
+                            : '👆 在棋盘上点击落子作答'}
+                        </div>
+                        <Button variant="ghost" size="sm" className="h-10 px-3 rounded-xl" onClick={handleShowHint} disabled={showHint >= problem.hints.length}>
+                          <Lightbulb className="h-4 w-4 mr-1" /> 提示
+                        </Button>
+                        <Button variant="ghost" size="sm" className="h-10 px-3 rounded-xl" onClick={handleShowSolution}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button variant="ghost" size="sm" className="h-10 px-3 rounded-xl" onClick={handleShowHint} disabled={showHint >= problem.hints.length}>
-                        <Lightbulb className="h-4 w-4 mr-1" /> 提示
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-10 px-3 rounded-xl" onClick={handleShowSolution}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      {problem.solution.win_condition === 'ai_battle' && (
+                        <p className="text-xs text-blue-600 text-center">
+                          AI会自动按正解图/错误图应对你的走法
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

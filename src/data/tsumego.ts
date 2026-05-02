@@ -20,7 +20,7 @@ export type TsumegoCategory = 'capture' | 'life_death' | 'tesuji';
 export type TsumegoDifficulty = 1 | 2 | 3 | 4 | 5;
 
 /** 判定方式 */
-export type TsumegoWinCondition = 'exact_move' | 'capture' | 'live';
+export type TsumegoWinCondition = 'exact_move' | 'capture' | 'live' | 'ai_battle';
 
 export interface TsumegoProblem {
   id: string;
@@ -46,6 +46,12 @@ export interface TsumegoProblem {
     win_condition: TsumegoWinCondition;
     /** capture 模式下需提掉的最少白子数 */
     capture_min?: number;
+    /** 先手方（AI对弈模式用） */
+    to_play?: 'black' | 'white';
+    /** AI对弈模式：完整交替落子序列 */
+    ai_moves?: Array<{ row: number; col: number; color?: string }>;
+    /** AI对弈模式：替代分支的完整交替落子序列 */
+    alternative_ai_moves?: Array<Array<{ row: number; col: number; color?: string }>>;
   };
   /** 标签 */
   tags: string[];
@@ -600,12 +606,108 @@ const TESUJI_PROBLEMS: TsumegoProblem[] = [
 ];
 
 // ============================================================
+// AI对弈模式示例题目
+// ============================================================
+const AI_BATTLE_PROBLEMS: TsumegoProblem[] = [
+  {
+    id: 'ai-001',
+    title: 'AI对弈 - 简单叫吃提子',
+    description: '白子只剩1口气了！找到正确的叫吃位置，然后继续应对AI的应手，最终提掉白子。',
+    category: 'capture',
+    difficulty: 1,
+    boardSize: 9,
+    initialPosition: {
+      black: [[4, 4], [3, 3], [3, 5], [5, 3]],
+      white: [[4, 3], [4, 5], [3, 4]],
+    },
+    solution: {
+      moves: [[5, 4]],
+      explanation: '黑棋下在[5,4]叫吃白子[4,5]，白子只剩1口气。AI（白棋）只能逃跑到[5,5]，然后黑棋在[5,6]继续叫吃，最终提掉白子。',
+      win_condition: 'ai_battle',
+      to_play: 'black',
+      ai_moves: [
+        { row: 5, col: 4, color: 'black' },   // 用户第1步：叫吃
+        { row: 5, col: 5, color: 'white' },   // AI应手：逃跑
+        { row: 5, col: 6, color: 'black' },   // 用户第2步：继续叫吃
+        { row: 6, col: 5, color: 'white' },   // AI应手：再逃
+        { row: 6, col: 6, color: 'black' },   // 用户第3步：提子
+      ],
+    },
+    tags: ['AI对弈', '叫吃', '提子'],
+    hints: ['找到白子气最少的地方', '先叫吃，再追击', '注意AI会逃跑'],
+  },
+  {
+    id: 'ai-002',
+    title: 'AI对弈 - 白先破眼',
+    description: '你是白棋！黑棋正在做眼，找到破眼的要点，阻止黑棋做出两只眼。',
+    category: 'life_death',
+    difficulty: 2,
+    boardSize: 9,
+    initialPosition: {
+      black: [[2, 2], [2, 3], [2, 4], [3, 2], [3, 4], [4, 2], [4, 3], [4, 4]],
+      white: [[1, 2], [1, 3], [1, 4], [2, 1], [3, 1], [4, 1], [5, 2], [5, 3], [5, 4]],
+    },
+    solution: {
+      moves: [[3, 3]],
+      explanation: '白棋下在[3,3]破坏黑棋的眼位。黑棋试图在[2,3]或[4,3]做眼，但白棋继续占据关键位置，最终黑棋无法做出两只眼。',
+      win_condition: 'ai_battle',
+      to_play: 'white',
+      ai_moves: [
+        { row: 3, col: 3, color: 'white' },   // 用户第1步：破眼
+        { row: 2, col: 3, color: 'black' },   // AI应手：试图做眼
+        { row: 3, col: 2, color: 'white' },   // 用户第2步：继续破眼
+      ],
+    },
+    tags: ['AI对弈', '破眼', '杀棋'],
+    hints: ['黑棋内部的空间是关键', '抢占中心点破眼', '阻止黑棋做出两只眼'],
+  },
+  {
+    id: 'ai-003',
+    title: 'AI对弈 - 含错误分支测试',
+    description: '测试题目：黑先。正解是[4,4]，如果走错到[3,4]会进入错误分支，AI会继续应对让你看到错误结果。',
+    category: 'capture',
+    difficulty: 1,
+    boardSize: 9,
+    initialPosition: {
+      black: [[3, 3], [3, 5], [5, 3]],
+      white: [[4, 3], [4, 5], [3, 4]],
+    },
+    solution: {
+      moves: [[4, 4]],
+      explanation: '黑棋下在[4,4]是正确的叫吃，白子[4,5]只剩1口气。',
+      win_condition: 'ai_battle',
+      to_play: 'black',
+      ai_moves: [
+        { row: 4, col: 4, color: 'black' },   // 用户第1步：正解叫吃
+        { row: 5, col: 5, color: 'white' },   // AI应手：逃跑
+        { row: 5, col: 4, color: 'black' },   // 用户第2步：继续叫吃
+      ],
+    },
+    wrong_answers: [
+      {
+        moves: [[3, 4]],
+        explanation: '这步棋没有威胁到白子，白棋可以从容应对。',
+        ai_moves: [
+          { row: 3, col: 4, color: 'black' },   // 用户走错第1步
+          { row: 4, col: 4, color: 'white' },   // AI应手：抢占要点
+          { row: 2, col: 4, color: 'black' },   // 用户第2步（错误分支继续）
+          { row: 2, col: 5, color: 'white' },   // AI应手：继续应对
+        ],
+      },
+    ],
+    tags: ['AI对弈', '测试', '错误分支'],
+    hints: ['找到能威胁白子的位置', '正解能叫吃白子'],
+  },
+];
+
+// ============================================================
 // 导出全部题目
 // ============================================================
 export const ALL_TSUMEGO_PROBLEMS: TsumegoProblem[] = [
   ...CAPTURE_PROBLEMS,
   ...LIFE_DEATH_PROBLEMS,
   ...TESUJI_PROBLEMS,
+  ...AI_BATTLE_PROBLEMS,
 ];
 
 /** 按分类获取题目 */
