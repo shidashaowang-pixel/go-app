@@ -73,15 +73,21 @@ export default function ParentDashboard() {
         return;
       }
 
-      // 更新绑定关系
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ parent_id: user.id })
-        .eq('id', childProfile.id);
+      // 使用 RPC 函数绑定孩子（绕过 RLS 限制）
+      const { data: bindResult, error: bindError } = await supabase
+        .rpc('bind_child_to_parent', {
+          child_username: bindUsername.trim(),
+          parent_uuid: user.id
+        });
 
-      if (updateError) throw updateError;
+      if (bindError) throw bindError;
 
-      toast.success(`成功绑定 ${childProfile.nickname || childProfile.username}！`);
+      if (!bindResult.success) {
+        toast.error(bindResult.message);
+        return;
+      }
+
+      toast.success(bindResult.message);
       setShowBindDialog(false);
       setBindUsername('');
       
