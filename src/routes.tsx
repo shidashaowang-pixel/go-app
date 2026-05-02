@@ -44,7 +44,9 @@ import TeacherProblems from './pages/teacher/TeacherProblems';
 import ProblemEditor from './pages/teacher/ProblemEditor';
 import ProblemManagement from './pages/teacher/ProblemManagement';
 import ContentManagement from './pages/teacher/ContentManagement';
+import InviteStudents from './pages/teacher/InviteStudents';
 import ParentDashboard from './pages/parent/ParentDashboard';
+import LearningPlan from './pages/parent/LearningPlan';
 import type { ReactNode } from 'react';
 
 export interface RouteConfig {
@@ -286,6 +288,11 @@ export const routes: RouteConfig[] = [
     name: '内容管理',
     path: '/teacher/content',
     element: <ContentManagement />,
+  },
+  {
+    name: '邀请学生',
+    path: '/teacher/invite',
+    element: <InviteStudents />,
   },
   {
     name: '家长中心',

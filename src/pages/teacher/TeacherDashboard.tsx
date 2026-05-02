@@ -82,7 +82,7 @@ export default function TeacherDashboard() {
             </div>
 
             {/* 功能入口 */}
-            <div className="grid gap-6 md:grid-cols-2 max-w-4xl mx-auto">
+            <div className="grid gap-6 md:grid-cols-3 max-w-4xl mx-auto">
               <Link to="/teacher/courses">
                 <Card className="h-full transition-all hover:shadow-lg hover:scale-105">
                   <CardHeader>
@@ -114,10 +114,25 @@ export default function TeacherDashboard() {
                   <CardHeader>
                     <Users className="h-16 w-16 mb-4 text-chart-2" />
                     <CardTitle>学员管理</CardTitle>
-                    <CardDescription>查看学员学习进度</CardDescription>
+                    <CardDescription>查看学员学习进度和数据分析</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Button className="w-full">查看学员</Button>
+                  </CardContent>
+                </Card>
+              </Link>
+
+              <Link to="/teacher/invite">
+                <Card className="h-full transition-all hover:shadow-lg hover:scale-105">
+                  <CardHeader>
+                    <svg className="h-16 w-16 mb-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                    </svg>
+                    <CardTitle>邀请学生</CardTitle>
+                    <CardDescription>通过邀请码或班级代码邀请学生加入班级</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button className="w-full">邀请学生</Button>
                   </CardContent>
                 </Card>
               </Link>

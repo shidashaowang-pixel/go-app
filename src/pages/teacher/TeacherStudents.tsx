@@ -157,6 +157,56 @@ export default function TeacherStudents() {
             </CardContent></Card>
           </div>
 
+          {/* 学习数据分析 */}
+          <Card className="mb-4">
+            <CardHeader><CardTitle>学习数据分析</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">平均每日学习量</p>
+                  <p className="font-semibold">
+                    {Math.round((totalGames + completedProblems + completedCourses) / 30)}
+                    <span className="text-xs text-muted-foreground ml-1">题/日</span>
+                  </p>
+                </div>
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground mb-1">学习坚持度</p>
+                  <p className="font-semibold">
+                    {Math.round((progress.length > 0 ? progress.filter(p => p.created_at).length / 30 : 0) * 100)}%
+                    <span className="text-xs text-muted-foreground ml-1">坚持率</span>
+                  </p>
+                </div>
+              </div>
+              
+              {/* 学习强度评估 */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>对弈强度</span>
+                  <span className="font-medium">
+                    {totalGames < 10 ? '低' : totalGames < 30 ? '中' : '高'}
+                  </span>
+                </div>
+                <Progress value={Math.min(totalGames * 3, 100)} className="h-2" />
+                
+                <div className="flex justify-between text-sm">
+                  <span>理论学习</span>
+                  <span className="font-medium">
+                    {completedCourses < 3 ? '基础' : completedCourses < 8 ? '进阶' : '深入'}
+                  </span>
+                </div>
+                <Progress value={Math.min(completedCourses * 12, 100)} className="h-2" />
+                
+                <div className="flex justify-between text-sm">
+                  <span>题目练习</span>
+                  <span className="font-medium">
+                    {completedProblems < 20 ? '少量' : completedProblems < 50 ? '适中' : '大量'}
+                  </span>
+                </div>
+                <Progress value={Math.min(completedProblems, 100)} className="h-2" />
+              </div>
+            </CardContent>
+          </Card>
+
           {/* 对弈记录 */}
           <Card className="mb-4">
             <CardHeader><CardTitle>对弈记录</CardTitle></CardHeader>

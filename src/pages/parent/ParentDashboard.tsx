@@ -183,7 +183,7 @@ export default function ParentDashboard() {
             <p className="text-muted-foreground">实时查看孩子的学习进度和对弈记录</p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-4 mb-6">
+          <div className="grid gap-4 md:grid-cols-6 mb-6">
             <Card>
               <CardContent className="p-4 text-center">
                 <Swords className="h-6 w-6 mx-auto mb-2 text-primary" />
@@ -212,13 +212,32 @@ export default function ParentDashboard() {
                 <p className="text-xs text-muted-foreground">完成题目</p>
               </CardContent>
             </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <svg className="h-6 w-6 mx-auto mb-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+                <div className="text-2xl font-bold">{total > 0 ? Math.round((wins / total) * 100) : 0}%</div>
+                <p className="text-xs text-muted-foreground">胜率</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 text-center">
+                <svg className="h-6 w-6 mx-auto mb-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="text-2xl font-bold">{Math.round((total + completedProblems + completedCourses) / 7)}</div>
+                <p className="text-xs text-muted-foreground">日均活动</p>
+              </CardContent>
+            </Card>
           </div>
 
           <Tabs defaultValue="games">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="games">对弈记录</TabsTrigger>
               <TabsTrigger value="progress">学习进度</TabsTrigger>
               <TabsTrigger value="achievements">成就</TabsTrigger>
+              <TabsTrigger value="plan">学习计划</TabsTrigger>
             </TabsList>
 
             <TabsContent value="games">
@@ -287,6 +306,27 @@ export default function ParentDashboard() {
                       ))}
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="plan">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2">查看个性化学习计划</h3>
+                    <p className="text-muted-foreground mb-4">
+                      为{child.nickname || child.username}制定科学的学习计划，根据数据分析提供个性化建议
+                    </p>
+                    <Button onClick={() => window.open('/parent/plan', '_blank')} className="gap-2">
+                      查看详细学习计划
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
