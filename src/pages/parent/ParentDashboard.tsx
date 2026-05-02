@@ -84,7 +84,7 @@ export default function ParentDashboard() {
       toast.success(`成功绑定 ${childProfile.nickname || childProfile.username}！`);
       setShowBindDialog(false);
       setBindUsername('');
-      loadChildren(); // 刷新列表
+      await loadChildren(); // 刷新列表并等待完成
     } catch (error) {
       console.error('绑定失败:', error);
       toast.error('绑定失败，请稍后重试');
