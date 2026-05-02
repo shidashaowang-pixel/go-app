@@ -299,4 +299,9 @@ export const routes: RouteConfig[] = [
     path: '/parent',
     element: <ParentDashboard />,
   },
+  {
+    name: '学习计划',
+    path: '/parent/plan',
+    element: <LearningPlan />,
+  },
 ];
