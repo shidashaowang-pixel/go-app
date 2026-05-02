@@ -420,11 +420,11 @@ export default function ParentDashboard() {
 
       {/* 绑定已有孩子对话框 */}
       <Dialog open={showBindDialog} onOpenChange={setShowBindDialog}>
-        <DialogContent>
+        <DialogContent aria-describedby="bind-child-description">
           <DialogHeader>
             <DialogTitle>绑定已有孩子账号</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4" id="bind-child-description">
             <p className="text-sm text-muted-foreground">
               请输入您孩子的用户名（他们注册时使用的账号名），绑定后您可以在家长中心查看他们的学习数据。
             </p>
