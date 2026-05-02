@@ -74,16 +74,22 @@ export default function ParentDashboard() {
       }
 
       // 使用 RPC 函数绑定孩子（绕过 RLS 限制）
+      console.log('开始绑定孩子:', bindUsername.trim(), '家长ID:', user.id);
       const { data: bindResult, error: bindError } = await supabase
         .rpc('bind_child_to_parent', {
           child_username: bindUsername.trim(),
           parent_uuid: user.id
         });
 
-      if (bindError) throw bindError;
+      console.log('绑定结果:', bindResult, '错误:', bindError);
 
-      if (!bindResult.success) {
-        toast.error(bindResult.message);
+      if (bindError) {
+        console.error('RPC 错误:', bindError);
+        throw bindError;
+      }
+
+      if (!bindResult || !bindResult.success) {
+        toast.error(bindResult?.message || '绑定失败');
         return;
       }
 
@@ -128,6 +134,7 @@ export default function ParentDashboard() {
   const loadChildren = async () => {
     if (!user) return;
     try {
+      console.log('加载孩子数据，家长ID:', user.id);
       // 查找绑定到此家长的所有儿童
       const { data, error } = await supabase
         .from('profiles')
@@ -135,9 +142,13 @@ export default function ParentDashboard() {
         .eq('parent_id', user.id)
         .eq('role', 'child');
 
+      console.log('查询结果:', data, '错误:', error);
+
       if (error) throw error;
 
       const childProfiles: Profile[] = Array.isArray(data) ? data : [];
+      console.log('找到孩子数量:', childProfiles.length);
+      
       const childInfos: ChildInfo[] = [];
 
       for (const child of childProfiles) {
