@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/db/supabase';
 import { getUserGames, getUserProgress, getUserAchievements } from '@/db/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -420,11 +420,14 @@ export default function ParentDashboard() {
 
       {/* 绑定已有孩子对话框 */}
       <Dialog open={showBindDialog} onOpenChange={setShowBindDialog}>
-        <DialogContent aria-describedby="bind-child-description">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>绑定已有孩子账号</DialogTitle>
+            <DialogDescription>
+              请输入您孩子的用户名（他们注册时使用的账号名），绑定后您可以在家长中心查看他们的学习数据。
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4" id="bind-child-description">
+          <div className="space-y-4 py-4">
             <p className="text-sm text-muted-foreground">
               请输入您孩子的用户名（他们注册时使用的账号名），绑定后您可以在家长中心查看他们的学习数据。
             </p>
